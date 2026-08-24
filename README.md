@@ -10,7 +10,7 @@ Eine einfache, responsive Web-App zur Patientendokumentation bei einem Major Cas
 - Dokumentation von Medikation, Maßnahmen, Einheiten, Behandlungsplatz und Transportziel
 - Status vor Ort und im Krankenhaus
 - Suche, Filter und Einsatzübersicht
-- Farbliche Transportübersicht für unterwegs befindliche und im Krankenhaus angekommene Patienten
+- Farbliche Transportübersicht für transportbereite, unterwegs befindliche und im Krankenhaus angekommene Patienten
 - Lokale Speicherung im Browser
 
 ## Lokal starten

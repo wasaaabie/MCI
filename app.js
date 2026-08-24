@@ -13,7 +13,7 @@ const fields = [
   "injuries", "medication", "unitOnSite", "treatmentArea", "destinationHospital",
   "physician", "hospitalNotes", "notes"
 ];
-const checkFields = ["treatedOnSite", "idCheckCode7", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged"];
+const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged"];
 
 let patients = loadPatients();
 const $ = (selector) => document.querySelector(selector);
@@ -59,6 +59,7 @@ function render() {
     if (counter) counter.textContent = patients.filter(patient => patient.triage === category).length;
   });
   $("#countAll").textContent = patients.length;
+  $("#countReady").textContent = patients.filter(patient => patient.readyForTransport && !patient.transported && !patient.admitted).length;
   $("#countUnderway").textContent = patients.filter(patient => patient.transported && !patient.admitted).length;
   $("#countArrived").textContent = patients.filter(patient => patient.admitted).length;
   $("#emptyState").classList.toggle("hidden", patients.length > 0);
@@ -70,12 +71,13 @@ function render() {
 
 function patientCard(patient) {
   const triage = patient.triage || "unassigned";
-  const transportState = patient.admitted ? "arrived" : patient.transported ? "underway" : "open";
+  const transportState = patient.admitted ? "arrived" : patient.transported ? "underway" : patient.readyForTransport ? "ready" : "open";
   const history = Array.isArray(patient.triageHistory) ? patient.triageHistory : [];
   const lastTriageChange = history[history.length - 1];
   const statuses = [
     lastTriageChange && { label: `Triage: ${shortTriage(lastTriageChange.from)} → ${shortTriage(lastTriageChange.to)}`, style: "triage-change" },
     patient.treatedOnSite && { label: "Vor Ort behandelt", style: "" },
+    transportState === "ready" && { label: "Transportbereit", style: "ready" },
     transportState === "underway" && { label: "Unterwegs", style: "underway" },
     transportState === "arrived" && { label: "Im Krankenhaus", style: "arrived" },
     patient.surgery && { label: "OP", style: "" }, patient.discharged && { label: "Entlassen", style: "" }

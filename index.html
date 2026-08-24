@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
   <header class="app-header">
@@ -30,6 +30,7 @@
     </section>
 
     <section class="transport-summary" aria-label="Transportstatus">
+      <div class="transport-counter transport-ready"><span>Transportbereit</span><strong id="countReady">0</strong></div>
       <div class="transport-counter transport-underway"><span>Unterwegs zum Krankenhaus</span><strong id="countUnderway">0</strong></div>
       <div class="transport-counter transport-arrived"><span>Im Krankenhaus angekommen</span><strong id="countArrived">0</strong></div>
     </section>
@@ -102,6 +103,7 @@
           <div class="check-grid">
             <label class="check"><input id="treatedOnSite" type="checkbox"><span>Vor Ort behandelt</span></label>
             <label class="check"><input id="idCheckCode7" type="checkbox"><span>Ausweiskontrolle</span></label>
+            <label class="check ready-check"><input id="readyForTransport" type="checkbox"><span>Transportbereit</span></label>
             <label class="check transport-check"><input id="transported" type="checkbox"><span>Abtransportiert</span></label>
           </div>
         </section>
@@ -135,6 +137,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
