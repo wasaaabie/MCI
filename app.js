@@ -55,7 +55,8 @@ function render() {
     .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
   ["red", "yellow", "green", "black"].forEach(category => {
-    $(`#count${category[0].toUpperCase()}${category.slice(1)}`).textContent = patients.filter(patient => patient.triage === category).length;
+    const counter = $(`#count${category[0].toUpperCase()}${category.slice(1)}`);
+    if (counter) counter.textContent = patients.filter(patient => patient.triage === category).length;
   });
   $("#countAll").textContent = patients.length;
   $("#emptyState").classList.toggle("hidden", patients.length > 0);
@@ -114,7 +115,7 @@ function nextPatientNumber() {
 
 function collectForm() {
   const existing = patients.find(item => item.id === $("#patientId").value);
-  const patient = { id: existing?.id || (crypto.randomUUID?.() || `p-${Date.now()}`), createdAt: existing?.createdAt || new Date().toISOString() };
+  const patient = { id: existing?.id || (globalThis.crypto?.randomUUID?.() || `p-${Date.now()}`), createdAt: existing?.createdAt || new Date().toISOString() };
   fields.forEach(field => { patient[field] = $(`#${field}`).value.trim(); });
   checkFields.forEach(field => { patient[field] = $(`#${field}`).checked; });
   patient.updatedAt = new Date().toISOString();
