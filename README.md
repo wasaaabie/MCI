@@ -12,6 +12,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Erweiterbare Modulnavigation für zusätzliche Seiten
 - Labor Requests mit optionaler Probennummer und erledigter Historie
 - Totenübersicht mit Obduktionsstatus und Live-Belegung von 16 Kühlfächern
+- Optionales Sonderrecht zum endgültigen Löschen sämtlicher Historieneinträge
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
 - Automatische Live-Aktualisierung
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
@@ -99,6 +100,20 @@ Die Totenübersicht dokumentiert Patientenname, Todesdatum, vermuteten Todesumst
 ## Weitere Benutzer freigeben
 
 Für jede Person zuerst unter **Authentication → Users** ein Konto erstellen. Danach die oben gezeigte SQL-Abfrage mit deren E-Mail und Anzeigenamen ausführen.
+
+### Recht zum Löschen von Historien
+
+Standardmäßig darf kein Benutzer historische Einträge endgültig löschen. Das Sonderrecht gilt gemeinsam für abgeschlossene MCIs, erledigte Einträge am Schwarzen Brett, erledigte Labor Requests und abgeschlossene Einträge der Totenübersicht. Es wird im SQL Editor gezielt pro Benutzer vergeben:
+
+```sql
+update public.mci_members
+set can_delete_history = true
+where user_id = (
+  select id from auth.users where email = 'name@example.com'
+);
+```
+
+Nach einer Änderung des Rechts muss sich der betreffende Benutzer einmal ab- und wieder anmelden. Zum Entziehen `can_delete_history` wieder auf `false` setzen. Das Löschen ist unwiderruflich; bei einer abgeschlossenen MCI werden auch alle zugehörigen Patienten- und Protokolldaten entfernt.
 
 Zum Entziehen des Zugriffs:
 

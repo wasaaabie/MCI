@@ -5,8 +5,11 @@
 create table if not exists public.mci_members (
   user_id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
+  can_delete_history boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.mci_members add column if not exists can_delete_history boolean not null default false;
 
 create table if not exists public.incidents (
   id uuid primary key,
@@ -333,6 +336,44 @@ update public.deceased_records
 set chamber_occupied = false, chamber_number = null
 where autopsy_report and (chamber_occupied or chamber_number is not null);
 
+create or replace function public.delete_history_entry(p_entry_type text, p_entry_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.mci_members
+    where user_id = auth.uid() and can_delete_history
+  ) then
+    raise exception 'Keine Berechtigung zum endgültigen Löschen von Historieneinträgen.' using errcode = '42501';
+  end if;
+
+  case p_entry_type
+    when 'incident' then
+      if not exists (select 1 from public.incidents where id = p_entry_id and status = 'closed') then
+        raise exception 'Abgeschlossene MCI nicht gefunden.';
+      end if;
+      delete from public.patients where incident_id = p_entry_id;
+      -- Patientenlöschungen erzeugen noch Protokolleinträge; deshalb danach das Protokoll entfernen.
+      delete from public.activity_log where incident_id = p_entry_id;
+      delete from public.incidents where id = p_entry_id and status = 'closed';
+    when 'bulletin' then
+      delete from public.bulletin_entries where id = p_entry_id and status = 'done';
+      if not found then raise exception 'Historischer Brett-Eintrag nicht gefunden.'; end if;
+    when 'lab' then
+      delete from public.lab_requests where id = p_entry_id and status = 'done';
+      if not found then raise exception 'Historischer Labor Request nicht gefunden.'; end if;
+    when 'deceased' then
+      delete from public.deceased_records where id = p_entry_id and autopsy_report;
+      if not found then raise exception 'Historischer Eintrag der Totenübersicht nicht gefunden.'; end if;
+    else
+      raise exception 'Unbekannter Historientyp.';
+  end case;
+end;
+$$;
+
 drop trigger if exists patients_activity_trigger on public.patients;
 create trigger patients_activity_trigger after insert or update or delete on public.patients
 for each row execute function public.log_patient_activity();
@@ -358,6 +399,8 @@ revoke execute on function public.log_incident_activity() from public, anon, aut
 revoke execute on function public.protect_bulletin_entry() from public, anon, authenticated;
 revoke execute on function public.protect_lab_request() from public, anon, authenticated;
 revoke execute on function public.protect_deceased_record() from public, anon, authenticated;
+revoke execute on function public.delete_history_entry(text, uuid) from public, anon, authenticated;
+grant execute on function public.delete_history_entry(text, uuid) to authenticated;
 
 alter table public.mci_members enable row level security;
 alter table public.incidents enable row level security;
@@ -574,3 +617,6 @@ end $$;
 -- insert into public.mci_members (user_id, display_name)
 -- select id, 'Anzeigename' from auth.users where email = 'name@example.com'
 -- on conflict (user_id) do update set display_name = excluded.display_name;
+-- Recht zum endgültigen Löschen sämtlicher Historien vergeben:
+-- update public.mci_members set can_delete_history = true
+-- where user_id = (select id from auth.users where email = 'name@example.com');

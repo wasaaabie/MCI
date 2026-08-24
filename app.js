@@ -31,6 +31,7 @@ let realtimeChannel = null;
 let reloadTimer = null;
 let migrationChecked = false;
 let toastTimer;
+let canDeleteHistory = false;
 
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#patientDialog");
@@ -91,7 +92,7 @@ async function applySession(session) {
 
   const { data: membership, error } = await db
     .from("mci_members")
-    .select("display_name")
+    .select("display_name, can_delete_history")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -104,6 +105,7 @@ async function applySession(session) {
 
   activeUserId = user.id;
   currentUser = user;
+  canDeleteHistory = Boolean(membership.can_delete_history);
   $("#userEmail").textContent = membership.display_name || user.email || "Einsatzkonto";
   $("#authGate").classList.add("hidden");
   $("#appHeader").classList.remove("hidden");
@@ -115,6 +117,7 @@ async function applySession(session) {
 }
 
 function showLogin() {
+  canDeleteHistory = false;
   bulletinEntries = [];
   labEntries = [];
   deceasedRecords = [];
@@ -232,6 +235,7 @@ function renderIncidents() {
   document.querySelectorAll("[data-incident-id]").forEach(button => {
     button.addEventListener("click", () => openIncident(button.dataset.incidentId));
   });
+  document.querySelectorAll('[data-delete-history="incident"]').forEach(button => button.addEventListener("click", () => deleteHistoricalEntry("incident", button.dataset.historyId)));
 }
 
 function incidentCard(incident) {
@@ -248,7 +252,7 @@ function incidentCard(incident) {
     </div>
     <div class="incident-card-footer">
       <small>${closed ? `Beendet ${formatDate(incident.closed_at)}` : "Laufender Einsatz"}</small>
-      <button class="edit-button" type="button" data-incident-id="${incident.id}">${closed ? "Historie öffnen" : "MCI öffnen"}</button>
+      <div class="history-card-actions"><button class="edit-button" type="button" data-incident-id="${incident.id}">${closed ? "Historie öffnen" : "MCI öffnen"}</button>${closed ? historyDeleteButton("incident", incident.id) : ""}</div>
     </div>
   </article>`;
 }
@@ -370,9 +374,10 @@ function renderBulletinEntries() {
   $("#openBulletinCount").textContent = openEntries.length;
   $("#closedBulletinCount").textContent = closedEntries.length;
   $("#openBulletinBody").innerHTML = openEntries.length ? openEntries.map(openBulletinRow).join("") : `<tr><td class="table-empty" colspan="6">Keine offenen Einträge vorhanden.</td></tr>`;
-  $("#closedBulletinBody").innerHTML = closedEntries.length ? closedEntries.map(closedBulletinRow).join("") : `<tr><td class="table-empty" colspan="6">Noch keine erledigten Einträge vorhanden.</td></tr>`;
+  $("#closedBulletinBody").innerHTML = closedEntries.length ? closedEntries.map(closedBulletinRow).join("") : `<tr><td class="table-empty" colspan="7">Noch keine erledigten Einträge vorhanden.</td></tr>`;
   document.querySelectorAll("[data-complete-bulletin]").forEach(button => button.addEventListener("click", () => completeBulletinEntry(button.dataset.completeBulletin)));
   document.querySelectorAll("[data-edit-bulletin]").forEach(button => button.addEventListener("click", () => openBulletinDialog(button.dataset.editBulletin)));
+  document.querySelectorAll('[data-delete-history="bulletin"]').forEach(button => button.addEventListener("click", () => deleteHistoricalEntry("bulletin", button.dataset.historyId)));
 }
 
 function openBulletinRow(entry) {
@@ -381,7 +386,7 @@ function openBulletinRow(entry) {
 }
 
 function closedBulletinRow(entry) {
-  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td></tr>`;
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td><td>${historyDeleteButton("bulletin", entry.id)}</td></tr>`;
 }
 
 async function completeBulletinEntry(id) {
@@ -449,9 +454,10 @@ function renderLabEntries() {
   $("#openLabCount").textContent = openEntries.length;
   $("#closedLabCount").textContent = closedEntries.length;
   $("#openLabBody").innerHTML = openEntries.length ? openEntries.map(openLabRow).join("") : `<tr><td class="table-empty" colspan="7">Keine offenen Labor Requests vorhanden.</td></tr>`;
-  $("#closedLabBody").innerHTML = closedEntries.length ? closedEntries.map(closedLabRow).join("") : `<tr><td class="table-empty" colspan="7">Noch keine erledigten Labor Requests vorhanden.</td></tr>`;
+  $("#closedLabBody").innerHTML = closedEntries.length ? closedEntries.map(closedLabRow).join("") : `<tr><td class="table-empty" colspan="8">Noch keine erledigten Labor Requests vorhanden.</td></tr>`;
   document.querySelectorAll("[data-complete-lab]").forEach(button => button.addEventListener("click", () => completeLabEntry(button.dataset.completeLab)));
   document.querySelectorAll("[data-edit-lab]").forEach(button => button.addEventListener("click", () => openLabDialog(button.dataset.editLab)));
+  document.querySelectorAll('[data-delete-history="lab"]').forEach(button => button.addEventListener("click", () => deleteHistoricalEntry("lab", button.dataset.historyId)));
 }
 
 function openLabRow(entry) {
@@ -460,7 +466,7 @@ function openLabRow(entry) {
 }
 
 function closedLabRow(entry) {
-  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td>${escapeHtml(entry.sample_number || "–")}</td><td class="bulletin-concern">${escapeHtml(entry.note)}</td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td></tr>`;
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td>${escapeHtml(entry.sample_number || "–")}</td><td class="bulletin-concern">${escapeHtml(entry.note)}</td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td><td>${historyDeleteButton("lab", entry.id)}</td></tr>`;
 }
 
 async function completeLabEntry(id) {
@@ -610,9 +616,10 @@ function renderDeceasedRecords() {
     : `<tr><td class="table-empty" colspan="8">Keine aktiven Einträge vorhanden.</td></tr>`;
   $("#deceasedHistoryBody").innerHTML = historyRecords.length
     ? historyRecords.map(deceasedHistoryTableRow).join("")
-    : `<tr><td class="table-empty" colspan="7">Noch keine abgeschlossenen Einträge vorhanden.</td></tr>`;
+    : `<tr><td class="table-empty" colspan="8">Noch keine abgeschlossenen Einträge vorhanden.</td></tr>`;
   document.querySelectorAll("[data-edit-deceased]").forEach(button => button.addEventListener("click", () => openDeceasedDialog(button.dataset.editDeceased)));
   document.querySelectorAll("[data-new-deceased-chamber]").forEach(button => button.addEventListener("click", () => openDeceasedDialog("", Number(button.dataset.newDeceasedChamber))));
+  document.querySelectorAll('[data-delete-history="deceased"]').forEach(button => button.addEventListener("click", () => deleteHistoricalEntry("deceased", button.dataset.historyId)));
 }
 
 function deceasedTableRow(record) {
@@ -634,7 +641,37 @@ function deceasedTableRow(record) {
 function deceasedHistoryTableRow(record) {
   const completedBy = record.updated_by_name || record.created_by_name || "Unbekannt";
   const completedAt = record.updated_at || record.created_at;
-  return `<tr><td><strong>${escapeHtml(record.patient_name)}</strong><small>Obduktionsbericht vorhanden</small></td><td class="bulletin-date">${formatCalendarDate(record.date_of_death)}</td><td>${escapeHtml(record.suspected_circumstances)}</td><td>${escapeHtml(record.contact_information || "–")}</td><td class="bulletin-date">${formatCalendarDate(record.burial_date)}</td><td>${escapeHtml(completedBy)}</td><td class="bulletin-date">${formatDate(completedAt)}</td></tr>`;
+  return `<tr><td><strong>${escapeHtml(record.patient_name)}</strong><small>Obduktionsbericht vorhanden</small></td><td class="bulletin-date">${formatCalendarDate(record.date_of_death)}</td><td>${escapeHtml(record.suspected_circumstances)}</td><td>${escapeHtml(record.contact_information || "–")}</td><td class="bulletin-date">${formatCalendarDate(record.burial_date)}</td><td>${escapeHtml(completedBy)}</td><td class="bulletin-date">${formatDate(completedAt)}</td><td>${historyDeleteButton("deceased", record.id)}</td></tr>`;
+}
+
+function historyDeleteButton(type, id) {
+  return canDeleteHistory
+    ? `<button class="history-delete-button" type="button" data-delete-history="${type}" data-history-id="${id}">Endgültig löschen</button>`
+    : "";
+}
+
+async function deleteHistoricalEntry(type, id) {
+  if (!canDeleteHistory || !db) return;
+  const sources = {
+    incident: incidents,
+    bulletin: bulletinEntries,
+    lab: labEntries,
+    deceased: deceasedRecords
+  };
+  const entry = sources[type]?.find(item => item.id === id);
+  const label = entry?.title || entry?.patient_name || "dieser Eintrag";
+  const incidentWarning = type === "incident" ? " Dabei werden auch alle Patienten- und Protokolldaten dieser MCI gelöscht." : "";
+  if (!confirm(`„${label}“ wirklich endgültig aus der Historie löschen?${incidentWarning} Dieser Vorgang ist unwiderruflich.`)) return;
+  const { error } = await db.rpc("delete_history_entry", { p_entry_type: type, p_entry_id: id });
+  if (error) {
+    showToast("Historieneintrag konnte nicht gelöscht werden. Recht und Datenbankversion prüfen.");
+    return;
+  }
+  if (type === "incident") await loadIncidents();
+  if (type === "bulletin") await loadBulletinEntries();
+  if (type === "lab") await loadLabEntries();
+  if (type === "deceased") await loadDeceasedRecords();
+  showToast("Historieneintrag wurde endgültig gelöscht.");
 }
 
 async function loadActivity() {
