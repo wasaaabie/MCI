@@ -18,6 +18,7 @@ const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "tran
 
 let patients = [];
 let incidents = [];
+let activities = [];
 let currentIncident = null;
 let db = null;
 let currentUser = null;
@@ -113,7 +114,7 @@ async function loadIncidents() {
   if (!db || !currentUser) return;
   const { data, error } = await db
     .from("incidents")
-    .select("id, title, location, description, status, started_at, closed_at, created_at, updated_at")
+    .select("id, title, location, scene_lead, description, status, started_at, closed_at, created_at, updated_at")
     .order("started_at", { ascending: false });
   if (error) {
     showToast("MCI-Liste konnte nicht geladen werden.");
@@ -169,6 +170,9 @@ function startRealtime() {
         if (currentIncident) loadRemotePatients();
       }, 150);
     })
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_log" }, payload => {
+      if (currentIncident && payload.new?.incident_id === currentIncident.id) loadActivity();
+    })
     .subscribe();
 }
 
@@ -202,6 +206,7 @@ function incidentCard(incident) {
     </div>
     <div class="incident-card-details">
       <div><span>Beginn</span><strong>${formatDate(incident.started_at)}</strong></div>
+      <div><span>Scene Lead</span><strong>${escapeHtml(incident.scene_lead || "Unbekannt")}</strong></div>
       <div><span>Patienten</span><strong>${incident.patientCount || 0}</strong></div>
     </div>
     <div class="incident-card-footer">
@@ -214,6 +219,7 @@ function incidentCard(incident) {
 function showIncidentOverview() {
   currentIncident = null;
   patients = [];
+  activities = [];
   $("#pageTitle").textContent = "MCI Übersicht";
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
@@ -235,13 +241,14 @@ async function openIncident(id) {
   $("#pageTitle").textContent = incident.title;
   $("#incidentTitle").textContent = incident.title;
   $("#incidentStatusLabel").textContent = closed ? "Abgeschlossene MCI" : "Aktive MCI";
-  $("#incidentMeta").textContent = `${incident.location || "Ohne Ortsangabe"} · Beginn ${formatDate(incident.started_at)}`;
+  $("#incidentMeta").textContent = `${incident.location || "Ohne Ortsangabe"} · Scene Lead: ${incident.scene_lead || "Unbekannt"} · Beginn ${formatDate(incident.started_at)}`;
   $("#readOnlyBadge").classList.toggle("hidden", !closed);
   $("#backToIncidentsBtn").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.toggle("hidden", closed);
   $("#closeIncidentBtn").classList.toggle("hidden", closed);
   await loadRemotePatients();
+  await loadActivity();
 }
 
 function openIncidentDialog() {
@@ -249,6 +256,55 @@ function openIncidentDialog() {
   $("#newIncidentStartedAt").value = localDateTimeValue(new Date());
   $("#incidentDialog").showModal();
   setTimeout(() => $("#newIncidentTitle").focus(), 50);
+}
+
+async function loadActivity() {
+  if (!db || !currentUser || !currentIncident) return;
+  const { data, error } = await db
+    .from("activity_log")
+    .select("id, action, subject_label, changed_fields, display_name, created_at")
+    .eq("incident_id", currentIncident.id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  activities = error ? [] : (data || []);
+  renderActivity();
+}
+
+function renderActivity() {
+  $("#activityCount").textContent = activities.length;
+  $("#activityList").innerHTML = activities.length
+    ? activities.map(activityEntry).join("")
+    : `<div class="activity-empty">Für diese MCI wurden noch keine Änderungen protokolliert.</div>`;
+}
+
+function activityEntry(entry) {
+  const actionLabels = {
+    incident_created: "hat die MCI angelegt",
+    incident_closed: "hat die MCI abgeschlossen",
+    patient_created: `hat Patient ${entry.subject_label || ""} angelegt`,
+    patient_updated: `hat Patient ${entry.subject_label || ""} bearbeitet`,
+    patient_deleted: `hat Patient ${entry.subject_label || ""} gelöscht`
+  };
+  const fieldLabels = {
+    name: "Name", patientNumber: "Patientennummer", gender: "Geschlecht", age: "Alter/Geburtsdatum",
+    description: "Personenbeschreibung", triage: "Triage", triageTime: "Sichtungszeit",
+    injuries: "Verletzungen", medication: "Medikation/Maßnahmen", unitOnSite: "Einheit vor Ort",
+    treatmentArea: "Behandlungsplatz", destinationHospital: "Zielkrankenhaus", physician: "Mediziner",
+    hospitalNotes: "Klinische Notizen", notes: "Bemerkungen", treatedOnSite: "Vor Ort behandelt",
+    idCheckCode7: "Ausweiskontrolle vor Ort", readyForTransport: "Transportbereit", transported: "Abtransportiert",
+    admitted: "Eingeliefert", surgery: "OP", treatedHospital: "Im Krankenhaus behandelt",
+    idCheckHospital: "Ausweiskontrolle Krankenhaus", discharged: "Entlassen", triageHistory: "Triage-Verlauf"
+  };
+  const changed = Array.isArray(entry.changed_fields)
+    ? entry.changed_fields.map(field => fieldLabels[field] || field).join(", ")
+    : "";
+  const displayName = entry.display_name || "Unbekannt";
+  const initials = displayName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  return `<div class="activity-entry">
+    <span class="activity-avatar">${escapeHtml(initials || "?")}</span>
+    <div><p><strong>${escapeHtml(displayName)}</strong> ${escapeHtml(actionLabels[entry.action] || "hat eine Änderung vorgenommen")}</p>${changed ? `<small>Geändert: ${escapeHtml(changed)}</small>` : ""}</div>
+    <time>${formatDate(entry.created_at)}</time>
+  </div>`;
 }
 
 function readLocalPatients() {
@@ -452,6 +508,7 @@ form.addEventListener("submit", async event => {
   dialog.close();
   $("#saveState").textContent = "Synchronisiert";
   showToast("Patientendatensatz gespeichert.");
+  loadActivity();
 });
 
 $("#deleteBtn").addEventListener("click", async () => {
@@ -470,6 +527,7 @@ $("#deleteBtn").addEventListener("click", async () => {
   render();
   dialog.close();
   showToast("Patientendatensatz gelöscht.");
+  loadActivity();
 });
 
 function showToast(message) {
@@ -489,6 +547,7 @@ $("#incidentForm").addEventListener("submit", async event => {
     id: createUuid(),
     title: $("#newIncidentTitle").value.trim(),
     location: $("#newIncidentLocation").value.trim(),
+    scene_lead: $("#newIncidentSceneLead").value.trim(),
     description: $("#newIncidentDescription").value.trim(),
     status: "active",
     started_at: new Date($("#newIncidentStartedAt").value).toISOString(),

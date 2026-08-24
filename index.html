@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="stylesheet" href="styles.css?v=17">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -102,6 +102,11 @@
     </section>
 
     <section id="patientGrid" class="patient-grid" aria-live="polite"></section>
+
+    <section class="activity-section">
+      <div class="activity-heading"><div><p class="eyebrow">Audit Log</p><h2>Änderungsprotokoll</h2></div><span id="activityCount" class="history-count">0</span></div>
+      <div id="activityList" class="activity-list" aria-live="polite"></div>
+    </section>
   </main>
 
   <dialog id="incidentDialog" class="incident-dialog">
@@ -113,7 +118,8 @@
       <div class="form-body">
         <div class="form-grid">
           <label class="field"><span>Name der MCI *</span><input id="newIncidentTitle" required autocomplete="off" placeholder="z. B. Highway Collision"></label>
-          <label class="field"><span>Einsatzort</span><input id="newIncidentLocation" autocomplete="off" placeholder="Ort / Einsatzstelle"></label>
+          <label class="field"><span>Scene Lead *</span><input id="newIncidentSceneLead" required autocomplete="off" placeholder="Name des Scene Leads"></label>
+          <label class="field"><span>Ort / Postal Code (optional)</span><input id="newIncidentLocation" autocomplete="off" placeholder="z. B. 4012 oder Einsatzstelle"></label>
           <label class="field"><span>Startzeit *</span><input id="newIncidentStartedAt" type="datetime-local" required></label>
           <label class="field field-wide"><span>Beschreibung</span><textarea id="newIncidentDescription" rows="3" placeholder="Lage und weitere Informationen …"></textarea></label>
         </div>
@@ -202,6 +208,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
