@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
   <header class="app-header">
@@ -85,6 +85,10 @@
             <label class="field"><span>Triage-Einstufung *</span><select id="triage" required><option value="unassigned">Noch nicht eingestuft</option><option value="red">SK I · Rot – sofort</option><option value="yellow">SK II · Gelb – dringend</option><option value="green">SK III · Grün – nachrangig</option><option value="black">Schwarz – verstorben</option></select></label>
             <label class="field"><span>Zeitpunkt der Sichtung</span><input id="triageTime" type="datetime-local"></label>
           </div>
+          <div id="triageHistoryPanel" class="triage-history hidden">
+            <h4>Triage-Verlauf</h4>
+            <div id="triageHistoryList" class="triage-history-list"></div>
+          </div>
         </section>
 
         <section class="form-section">
@@ -131,6 +135,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

@@ -71,7 +71,10 @@ function render() {
 function patientCard(patient) {
   const triage = patient.triage || "unassigned";
   const transportState = patient.admitted ? "arrived" : patient.transported ? "underway" : "open";
+  const history = Array.isArray(patient.triageHistory) ? patient.triageHistory : [];
+  const lastTriageChange = history[history.length - 1];
   const statuses = [
+    lastTriageChange && { label: `Triage: ${shortTriage(lastTriageChange.from)} → ${shortTriage(lastTriageChange.to)}`, style: "triage-change" },
     patient.treatedOnSite && { label: "Vor Ort behandelt", style: "" },
     transportState === "underway" && { label: "Unterwegs", style: "underway" },
     transportState === "arrived" && { label: "Im Krankenhaus", style: "arrived" },
@@ -104,6 +107,7 @@ function openDialog(id = "") {
     $("#triageTime").value = localDateTimeValue(new Date());
     $("#patientNumber").value = nextPatientNumber();
   }
+  renderTriageHistory(patient);
   dialog.showModal();
   setTimeout(() => $("#name").focus(), 50);
 }
@@ -124,7 +128,30 @@ function collectForm() {
   fields.forEach(field => { patient[field] = $(`#${field}`).value.trim(); });
   checkFields.forEach(field => { patient[field] = $(`#${field}`).checked; });
   patient.updatedAt = new Date().toISOString();
+  patient.triageHistory = Array.isArray(existing?.triageHistory) ? [...existing.triageHistory] : [];
+  const previousTriage = existing?.triage || "unassigned";
+  if (patient.triage !== previousTriage) {
+    patient.triageHistory.push({ from: previousTriage, to: patient.triage, at: patient.updatedAt });
+  }
   return patient;
+}
+
+function shortTriage(value) {
+  return ({ red: "Rot", yellow: "Gelb", green: "Grün", black: "Schwarz", unassigned: "Offen" })[value] || "Offen";
+}
+
+function renderTriageHistory(patient, pendingTriage = "") {
+  const entries = Array.isArray(patient?.triageHistory) ? [...patient.triageHistory] : [];
+  if (patient && pendingTriage && pendingTriage !== patient.triage) {
+    entries.push({ from: patient.triage || "unassigned", to: pendingTriage, at: new Date().toISOString(), pending: true });
+  }
+  $("#triageHistoryPanel").classList.toggle("hidden", entries.length === 0);
+  $("#triageHistoryList").innerHTML = entries.slice().reverse().map(entry => `
+    <div class="triage-history-entry${entry.pending ? " pending" : ""}">
+      <span class="triage-dot ${escapeHtml(entry.to)}"></span>
+      <span><strong>${shortTriage(entry.from)} → ${shortTriage(entry.to)}</strong>${entry.pending ? " · wird beim Speichern dokumentiert" : ""}</span>
+      <time>${formatDate(entry.at)}</time>
+    </div>`).join("");
 }
 
 form.addEventListener("submit", event => {
@@ -157,6 +184,10 @@ $("#closeDialogBtn").addEventListener("click", () => dialog.close());
 $("#cancelBtn").addEventListener("click", () => dialog.close());
 $("#searchInput").addEventListener("input", render);
 $("#triageFilter").addEventListener("change", render);
+$("#triage").addEventListener("change", event => {
+  const patient = patients.find(item => item.id === $("#patientId").value);
+  renderTriageHistory(patient, event.target.value);
+});
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 
 render();

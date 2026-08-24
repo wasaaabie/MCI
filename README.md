@@ -6,6 +6,7 @@ Eine einfache, responsive Web-App zur Patientendokumentation bei einem Major Cas
 
 - Patientenstammdaten, Personenbeschreibung und Verletzungsmuster
 - Triage nach Rot, Gelb und Grün sowie „verstorben“
+- Zeitlicher Triage-Verlauf mit dokumentierten Kategorieänderungen
 - Dokumentation von Medikation, Maßnahmen, Einheiten, Behandlungsplatz und Transportziel
 - Status vor Ort und im Krankenhaus
 - Suche, Filter und Einsatzübersicht
