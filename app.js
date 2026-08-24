@@ -83,7 +83,7 @@ function patientCard(patient) {
     patient.surgery && { label: "OP", style: "" }, patient.discharged && { label: "Entlassen", style: "" }
   ].filter(Boolean);
   return `<article class="patient-card" data-triage="${escapeHtml(triage)}" data-transport="${transportState}">
-    <div class="card-top"><div><h2>${escapeHtml(patient.name || "Unbekannt")}</h2><span class="patient-no">${escapeHtml(patient.patientNumber || "Ohne Patientennummer")}</span></div><span class="triage-badge ${escapeHtml(triage)}">${escapeHtml(triageLabels[triage] || triageLabels.unassigned)}</span></div>
+    <div class="card-top"><div><h2>${escapeHtml(patient.patientNumber || "Ohne Patientennummer")}</h2><span class="patient-no">${escapeHtml(patient.name || "Unbekannt")}</span></div><span class="triage-badge ${escapeHtml(triage)}">${escapeHtml(triageLabels[triage] || triageLabels.unassigned)}</span></div>
     <div class="card-details">
       <div class="detail"><span>Behandlungsplatz</span><strong title="${escapeHtml(patient.treatmentArea)}">${escapeHtml(patient.treatmentArea || "–")}</strong></div>
       <div class="detail"><span>Einheit vor Ort</span><strong title="${escapeHtml(patient.unitOnSite)}">${escapeHtml(patient.unitOnSite || "–")}</strong></div>
