@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=19">
+  <link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -41,6 +41,7 @@
       <button id="closeIncidentBtn" class="button button-danger hidden" type="button">MCI abschließen</button>
       <button id="newIncidentBtn" class="button button-primary" type="button">+ MCI anlegen</button>
       <button id="newBulletinBtn" class="button button-primary hidden" type="button">+ Eintrag anlegen</button>
+      <button id="newLabBtn" class="button button-primary hidden" type="button">+ Labor Request</button>
       <button id="newPatientBtn" class="button button-primary hidden" type="button">+ Patient anlegen</button>
     </div>
   </header>
@@ -49,8 +50,24 @@
     <p class="nav-label">Module</p>
     <button id="navIncidentsBtn" class="nav-item active" type="button"><span class="nav-icon">M</span><span><strong>MCI-Verwaltung</strong><small>Einsätze &amp; Historie</small></span></button>
     <button id="navBulletinBtn" class="nav-item" type="button"><span class="nav-icon">B</span><span><strong>Schwarzes Brett</strong><small>Anliegen &amp; Vorfälle</small></span></button>
-    <div class="nav-future"><span>Weitere Module</span><small>Navigation ist erweiterbar</small></div>
+    <button id="navLabBtn" class="nav-item" type="button"><span class="nav-icon">L</span><span><strong>Labor Requests</strong><small>Proben &amp; Hinweise</small></span></button>
+    <div class="nav-future"><span>Weiteres Modul</span><small>Navigation ist vorbereitet</small></div>
   </nav>
+
+  <main id="labMain" class="hidden">
+    <section class="incident-intro">
+      <div><p class="eyebrow">Laborübersicht</p><h2>Labor Requests</h2><p>Proben und Laboranliegen zentral erfassen und nachverfolgen.</p></div>
+      <button id="newLabMainBtn" class="button button-primary" type="button">+ Neuer Request</button>
+    </section>
+    <section class="board-section">
+      <div class="history-heading"><div><p class="eyebrow">Offen</p><h2>Aktuelle Requests</h2></div><span id="openLabCount" class="history-count">0</span></div>
+      <div class="table-wrap"><table class="bulletin-table"><thead><tr><th>Patient</th><th>Telefonnummer</th><th>Probennummer</th><th>Hinweis</th><th>Erstellt von</th><th>Erstellt am</th><th></th></tr></thead><tbody id="openLabBody"></tbody></table></div>
+    </section>
+    <section class="history-section">
+      <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Erledigte Requests</h2></div><span id="closedLabCount" class="history-count">0</span></div>
+      <div class="table-wrap"><table class="bulletin-table history-table"><thead><tr><th>Patient</th><th>Telefonnummer</th><th>Probennummer</th><th>Hinweis</th><th>Erstellt von</th><th>Erledigt von</th><th>Erledigt am</th></tr></thead><tbody id="closedLabBody"></tbody></table></div>
+    </section>
+  </main>
 
   <main id="bulletinMain" class="hidden">
     <section class="incident-intro">
@@ -66,6 +83,25 @@
       <div class="table-wrap"><table class="bulletin-table history-table"><thead><tr><th>Patient</th><th>Telefonnummer</th><th>Anliegen / Vorfall</th><th>Erstellt von</th><th>Erledigt von</th><th>Erledigt am</th></tr></thead><tbody id="closedBulletinBody"></tbody></table></div>
     </section>
   </main>
+
+  <dialog id="labDialog">
+    <form id="labForm" method="dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Labor Requests</p><h2 id="labDialogTitle">Request anlegen</h2></div>
+        <button id="closeLabDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button>
+      </div>
+      <div class="form-body">
+        <input id="labEntryId" type="hidden">
+        <div class="form-grid">
+          <label class="field"><span>Patientenname *</span><input id="labPatientName" required autocomplete="off" placeholder="Name des Patienten"></label>
+          <label class="field"><span>Telefonnummer *</span><input id="labPhone" type="tel" required autocomplete="off" placeholder="Telefonnummer"></label>
+          <label class="field"><span>Probennummer (optional)</span><input id="labSampleNumber" autocomplete="off" placeholder="Probennummer"></label>
+          <label class="field field-wide"><span>Hinweis *</span><textarea id="labNote" required rows="4" placeholder="Hinweis zum Labor Request …"></textarea></label>
+        </div>
+      </div>
+      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelLabBtn" class="button" type="button">Abbrechen</button><button id="saveLabBtn" class="button button-primary" type="submit">Request speichern</button></div>
+    </form>
+  </dialog>
 
   <main id="incidentMain" class="hidden">
     <section class="incident-intro">
@@ -248,6 +284,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

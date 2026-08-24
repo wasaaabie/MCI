@@ -20,6 +20,7 @@ let patients = [];
 let incidents = [];
 let activities = [];
 let bulletinEntries = [];
+let labEntries = [];
 let currentIncident = null;
 let db = null;
 let currentUser = null;
@@ -101,15 +102,18 @@ async function applySession(session) {
 
 function showLogin() {
   bulletinEntries = [];
+  labEntries = [];
   $("#authGate").classList.remove("hidden");
   $("#appHeader").classList.add("hidden");
   $("#appNav").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
+  $("#labMain").classList.add("hidden");
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   if (dialog.open) dialog.close();
   if ($("#incidentDialog").open) $("#incidentDialog").close();
   if ($("#bulletinDialog").open) $("#bulletinDialog").close();
+  if ($("#labDialog").open) $("#labDialog").close();
 }
 
 function setAuthError(message) {
@@ -183,6 +187,9 @@ function startRealtime() {
     .on("postgres_changes", { event: "*", schema: "public", table: "bulletin_entries" }, () => {
       if (!$("#bulletinMain").classList.contains("hidden")) loadBulletinEntries();
     })
+    .on("postgres_changes", { event: "*", schema: "public", table: "lab_requests" }, () => {
+      if (!$("#labMain").classList.contains("hidden")) loadLabEntries();
+    })
     .subscribe();
 }
 
@@ -232,11 +239,13 @@ function showIncidentOverview() {
   activities = [];
   $("#pageTitle").textContent = "MCI Übersicht";
   $("#bulletinMain").classList.add("hidden");
+  $("#labMain").classList.add("hidden");
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.add("hidden");
+  $("#newLabBtn").classList.add("hidden");
   $("#newIncidentBtn").classList.remove("hidden");
   setActiveNav("incidents");
   $("#saveState").textContent = "Live synchronisiert";
@@ -250,6 +259,7 @@ async function openIncident(id) {
   const closed = incident.status === "closed";
   $("#incidentMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
+  $("#labMain").classList.add("hidden");
   $("#appMain").classList.remove("hidden");
   $("#pageTitle").textContent = incident.title;
   $("#incidentTitle").textContent = incident.title;
@@ -258,6 +268,7 @@ async function openIncident(id) {
   $("#readOnlyBadge").classList.toggle("hidden", !closed);
   $("#newIncidentBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.add("hidden");
+  $("#newLabBtn").classList.add("hidden");
   $("#newPatientBtn").classList.toggle("hidden", closed);
   $("#closeIncidentBtn").classList.toggle("hidden", closed);
   setActiveNav("incidents");
@@ -279,11 +290,13 @@ async function showBulletinBoard() {
   $("#pageTitle").textContent = "Schwarzes Brett";
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
+  $("#labMain").classList.add("hidden");
   $("#bulletinMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.remove("hidden");
+  $("#newLabBtn").classList.add("hidden");
   setActiveNav("bulletin");
   await loadBulletinEntries();
 }
@@ -291,8 +304,10 @@ async function showBulletinBoard() {
 function setActiveNav(section) {
   $("#navIncidentsBtn").classList.toggle("active", section === "incidents");
   $("#navBulletinBtn").classList.toggle("active", section === "bulletin");
+  $("#navLabBtn").classList.toggle("active", section === "lab");
   $("#navIncidentsBtn").setAttribute("aria-current", section === "incidents" ? "page" : "false");
   $("#navBulletinBtn").setAttribute("aria-current", section === "bulletin" ? "page" : "false");
+  $("#navLabBtn").setAttribute("aria-current", section === "lab" ? "page" : "false");
 }
 
 function openBulletinDialog(id = "") {
@@ -351,6 +366,83 @@ async function completeBulletinEntry(id) {
   }
   await loadBulletinEntries();
   showToast("Eintrag wurde in die Historie verschoben.");
+}
+
+async function showLabRequests() {
+  currentIncident = null;
+  patients = [];
+  activities = [];
+  $("#pageTitle").textContent = "Labor Requests";
+  $("#incidentMain").classList.add("hidden");
+  $("#appMain").classList.add("hidden");
+  $("#bulletinMain").classList.add("hidden");
+  $("#labMain").classList.remove("hidden");
+  $("#newIncidentBtn").classList.add("hidden");
+  $("#newPatientBtn").classList.add("hidden");
+  $("#newBulletinBtn").classList.add("hidden");
+  $("#closeIncidentBtn").classList.add("hidden");
+  $("#newLabBtn").classList.remove("hidden");
+  setActiveNav("lab");
+  await loadLabEntries();
+}
+
+function openLabDialog(id = "") {
+  $("#labForm").reset();
+  $("#labEntryId").value = id;
+  const entry = labEntries.find(item => item.id === id);
+  $("#labDialogTitle").textContent = entry ? "Request bearbeiten" : "Request anlegen";
+  $("#saveLabBtn").textContent = entry ? "Änderungen speichern" : "Request speichern";
+  if (entry) {
+    $("#labPatientName").value = entry.patient_name;
+    $("#labPhone").value = entry.phone;
+    $("#labSampleNumber").value = entry.sample_number || "";
+    $("#labNote").value = entry.note;
+  }
+  $("#labDialog").showModal();
+  setTimeout(() => $("#labPatientName").focus(), 50);
+}
+
+async function loadLabEntries() {
+  if (!db || !currentUser) return;
+  const { data, error } = await db
+    .from("lab_requests")
+    .select("id, patient_name, phone, sample_number, note, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at")
+    .order("created_at", { ascending: false });
+  labEntries = error ? [] : (data || []);
+  if (error) showToast("Labor Requests konnten nicht geladen werden.");
+  renderLabEntries();
+}
+
+function renderLabEntries() {
+  const openEntries = labEntries.filter(entry => entry.status === "open");
+  const closedEntries = labEntries.filter(entry => entry.status === "done").sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
+  $("#openLabCount").textContent = openEntries.length;
+  $("#closedLabCount").textContent = closedEntries.length;
+  $("#openLabBody").innerHTML = openEntries.length ? openEntries.map(openLabRow).join("") : `<tr><td class="table-empty" colspan="7">Keine offenen Labor Requests vorhanden.</td></tr>`;
+  $("#closedLabBody").innerHTML = closedEntries.length ? closedEntries.map(closedLabRow).join("") : `<tr><td class="table-empty" colspan="7">Noch keine erledigten Labor Requests vorhanden.</td></tr>`;
+  document.querySelectorAll("[data-complete-lab]").forEach(button => button.addEventListener("click", () => completeLabEntry(button.dataset.completeLab)));
+  document.querySelectorAll("[data-edit-lab]").forEach(button => button.addEventListener("click", () => openLabDialog(button.dataset.editLab)));
+}
+
+function openLabRow(entry) {
+  const edited = entry.updated_at ? `<br><small>Bearbeitet von ${escapeHtml(entry.updated_by_name || "Unbekannt")} · ${formatDate(entry.updated_at)}</small>` : "";
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td>${escapeHtml(entry.sample_number || "–")}</td><td class="bulletin-concern">${escapeHtml(entry.note)}</td><td><strong>${escapeHtml(entry.created_by_name || "Unbekannt")}</strong>${edited}</td><td class="bulletin-date">${formatDate(entry.created_at)}</td><td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-edit-lab="${entry.id}">Bearbeiten</button><button class="complete-button" type="button" data-complete-lab="${entry.id}">Erledigt</button></div></td></tr>`;
+}
+
+function closedLabRow(entry) {
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td>${escapeHtml(entry.sample_number || "–")}</td><td class="bulletin-concern">${escapeHtml(entry.note)}</td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td></tr>`;
+}
+
+async function completeLabEntry(id) {
+  const entry = labEntries.find(item => item.id === id);
+  if (!entry || !confirm(`Labor Request für „${entry.patient_name}“ als erledigt markieren?`)) return;
+  const { error } = await db.from("lab_requests").update({ status: "done" }).eq("id", id).eq("status", "open");
+  if (error) {
+    showToast("Labor Request konnte nicht abgeschlossen werden.");
+    return;
+  }
+  await loadLabEntries();
+  showToast("Labor Request wurde in die Historie verschoben.");
 }
 
 async function loadActivity() {
@@ -632,6 +724,34 @@ function showToast(message) {
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3000);
 }
 
+$("#labForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!$("#labForm").reportValidity() || !currentUser) return;
+  const button = $("#saveLabBtn");
+  button.disabled = true;
+  button.textContent = "Speichert …";
+  const id = $("#labEntryId").value;
+  const values = {
+    patient_name: $("#labPatientName").value.trim(),
+    phone: $("#labPhone").value.trim(),
+    sample_number: $("#labSampleNumber").value.trim() || null,
+    note: $("#labNote").value.trim()
+  };
+  const result = id
+    ? await db.from("lab_requests").update({ ...values, status: "open" }).eq("id", id).eq("status", "open")
+    : await db.from("lab_requests").insert({ id: createUuid(), ...values, status: "open" });
+  const { error } = result;
+  button.disabled = false;
+  button.textContent = id ? "Änderungen speichern" : "Request speichern";
+  if (error) {
+    showToast("Labor Request konnte nicht gespeichert werden.");
+    return;
+  }
+  $("#labDialog").close();
+  await loadLabEntries();
+  showToast(id ? "Labor Request wurde aktualisiert." : "Labor Request wurde angelegt.");
+});
+
 $("#bulletinForm").addEventListener("submit", async event => {
   event.preventDefault();
   if (!$("#bulletinForm").reportValidity() || !currentUser) return;
@@ -726,10 +846,15 @@ $("#newIncidentBtn").addEventListener("click", openIncidentDialog);
 $("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
 $("#navIncidentsBtn").addEventListener("click", showIncidentOverview);
 $("#navBulletinBtn").addEventListener("click", showBulletinBoard);
+$("#navLabBtn").addEventListener("click", showLabRequests);
 $("#newBulletinBtn").addEventListener("click", () => openBulletinDialog());
 $("#newBulletinMainBtn").addEventListener("click", () => openBulletinDialog());
+$("#newLabBtn").addEventListener("click", () => openLabDialog());
+$("#newLabMainBtn").addEventListener("click", () => openLabDialog());
 $("#closeBulletinDialogBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#cancelBulletinBtn").addEventListener("click", () => $("#bulletinDialog").close());
+$("#closeLabDialogBtn").addEventListener("click", () => $("#labDialog").close());
+$("#cancelLabBtn").addEventListener("click", () => $("#labDialog").close());
 $("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#cancelIncidentBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#newPatientBtn").addEventListener("click", () => openDialog());
@@ -745,5 +870,6 @@ $("#triage").addEventListener("change", event => {
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 $("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
 $("#bulletinDialog").addEventListener("click", event => { if (event.target === $("#bulletinDialog")) $("#bulletinDialog").close(); });
+$("#labDialog").addEventListener("click", event => { if (event.target === $("#labDialog")) $("#labDialog").close(); });
 
 initialize();

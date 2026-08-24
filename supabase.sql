@@ -60,6 +60,24 @@ create table if not exists public.bulletin_entries (
   completed_at timestamptz
 );
 
+create table if not exists public.lab_requests (
+  id uuid primary key,
+  patient_name text not null,
+  phone text not null,
+  sample_number text,
+  note text not null,
+  status text not null default 'open' check (status in ('open', 'done')),
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz,
+  completed_by uuid references auth.users(id),
+  completed_by_name text,
+  completed_at timestamptz
+);
+
 alter table public.bulletin_entries add column if not exists updated_by uuid references auth.users(id);
 alter table public.bulletin_entries add column if not exists updated_by_name text;
 alter table public.bulletin_entries add column if not exists updated_at timestamptz;
@@ -107,6 +125,7 @@ create index if not exists patients_incident_id_idx on public.patients (incident
 create index if not exists incidents_status_started_idx on public.incidents (status, started_at desc);
 create index if not exists activity_log_incident_created_idx on public.activity_log (incident_id, created_at desc);
 create index if not exists bulletin_entries_status_created_idx on public.bulletin_entries (status, created_at desc);
+create index if not exists lab_requests_status_created_idx on public.lab_requests (status, created_at desc);
 
 create or replace function public.log_patient_activity()
 returns trigger
@@ -208,6 +227,39 @@ begin
 end;
 $$;
 
+create or replace function public.protect_lab_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  actor_name := coalesce(actor_name, 'Unbekannt');
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid(); new.created_by_name := actor_name; new.created_at := now();
+    new.status := 'open';
+    new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
+    new.completed_by := null; new.completed_by_name := null; new.completed_at := null;
+    return new;
+  end if;
+  if old.status <> 'open' then raise exception 'Erledigte Labor Requests sind schreibgeschützt.'; end if;
+  new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  if new.status = 'open' then
+    new.updated_by := auth.uid(); new.updated_by_name := actor_name; new.updated_at := now();
+    new.completed_by := null; new.completed_by_name := null; new.completed_at := null;
+    return new;
+  end if;
+  if new.status <> 'done' then raise exception 'Ungültiger Statuswechsel.'; end if;
+  new.patient_name := old.patient_name; new.phone := old.phone; new.sample_number := old.sample_number; new.note := old.note;
+  new.updated_by := old.updated_by; new.updated_by_name := old.updated_by_name; new.updated_at := old.updated_at;
+  new.completed_by := auth.uid(); new.completed_by_name := actor_name; new.completed_at := now();
+  return new;
+end;
+$$;
+
 drop trigger if exists patients_activity_trigger on public.patients;
 create trigger patients_activity_trigger after insert or update or delete on public.patients
 for each row execute function public.log_patient_activity();
@@ -220,26 +272,34 @@ drop trigger if exists bulletin_entries_protection_trigger on public.bulletin_en
 create trigger bulletin_entries_protection_trigger before insert or update on public.bulletin_entries
 for each row execute function public.protect_bulletin_entry();
 
+drop trigger if exists lab_requests_protection_trigger on public.lab_requests;
+create trigger lab_requests_protection_trigger before insert or update on public.lab_requests
+for each row execute function public.protect_lab_request();
+
 revoke execute on function public.log_patient_activity() from public, anon, authenticated;
 revoke execute on function public.log_incident_activity() from public, anon, authenticated;
 revoke execute on function public.protect_bulletin_entry() from public, anon, authenticated;
+revoke execute on function public.protect_lab_request() from public, anon, authenticated;
 
 alter table public.mci_members enable row level security;
 alter table public.incidents enable row level security;
 alter table public.patients enable row level security;
 alter table public.activity_log enable row level security;
 alter table public.bulletin_entries enable row level security;
+alter table public.lab_requests enable row level security;
 
 revoke all on public.mci_members from anon, authenticated;
 revoke all on public.incidents from anon, authenticated;
 revoke all on public.patients from anon, authenticated;
 revoke all on public.activity_log from anon, authenticated;
 revoke all on public.bulletin_entries from anon, authenticated;
+revoke all on public.lab_requests from anon, authenticated;
 grant select on public.mci_members to authenticated;
 grant select, insert, update on public.incidents to authenticated;
 grant select, insert, update, delete on public.patients to authenticated;
 grant select on public.activity_log to authenticated;
 grant select, insert, update on public.bulletin_entries to authenticated;
+grant select, insert, update on public.lab_requests to authenticated;
 
 drop policy if exists "Mitglied sieht eigene Freigabe" on public.mci_members;
 create policy "Mitglied sieht eigene Freigabe"
@@ -267,6 +327,34 @@ with check (
 drop policy if exists "Mitglieder erledigen Brett-Einträge" on public.bulletin_entries;
 create policy "Mitglieder erledigen Brett-Einträge"
 on public.bulletin_entries for update to authenticated
+using (
+  status = 'open'
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+)
+with check (
+  exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+  and (
+    (status = 'open' and updated_by = auth.uid() and completed_by is null)
+    or (status = 'done' and completed_by = auth.uid())
+  )
+);
+
+drop policy if exists "Mitglieder lesen Labor Requests" on public.lab_requests;
+create policy "Mitglieder lesen Labor Requests"
+on public.lab_requests for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
+
+drop policy if exists "Mitglieder erstellen Labor Requests" on public.lab_requests;
+create policy "Mitglieder erstellen Labor Requests"
+on public.lab_requests for insert to authenticated
+with check (
+  created_by = auth.uid() and status = 'open'
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+);
+
+drop policy if exists "Mitglieder bearbeiten Labor Requests" on public.lab_requests;
+create policy "Mitglieder bearbeiten Labor Requests"
+on public.lab_requests for update to authenticated
 using (
   status = 'open'
   and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
@@ -364,6 +452,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'bulletin_entries'
   ) then
     alter publication supabase_realtime add table public.bulletin_entries;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lab_requests'
+  ) then
+    alter publication supabase_realtime add table public.lab_requests;
   end if;
 end $$;
 
