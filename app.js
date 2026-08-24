@@ -521,6 +521,8 @@ function openDeceasedDialog(id = "", preferredChamber = null) {
   populateChamberOptions(id);
   $("#deceasedDialogTitle").textContent = record ? "Eintrag bearbeiten" : "Person erfassen";
   $("#saveDeceasedBtn").textContent = record ? "Änderungen speichern" : "Person speichern";
+  $("#releaseChamberBtn").classList.toggle("hidden", !record?.chamber_occupied);
+  $("#releaseChamberBtn").textContent = record?.chamber_number ? `Fach ${String(record.chamber_number).padStart(2, "0")} leeren` : "Kühlfach leeren";
   if (record) {
     $("#deceasedPatientName").value = record.patient_name;
     $("#deceasedDateOfDeath").value = record.date_of_death;
@@ -552,6 +554,27 @@ async function loadDeceasedRecords() {
   deceasedRecords = error ? [] : (data || []);
   if (error) showToast("Totenübersicht konnte nicht geladen werden.");
   renderDeceasedRecords();
+}
+
+async function releaseDeceasedChamber() {
+  const id = $("#deceasedEntryId").value;
+  const record = deceasedRecords.find(item => item.id === id);
+  if (!record?.chamber_occupied || !record.chamber_number) return;
+  const chamberLabel = `Fach ${String(record.chamber_number).padStart(2, "0")}`;
+  if (!confirm(`${chamberLabel} von „${record.patient_name}“ wirklich leeren? Der Personeneintrag bleibt erhalten.`)) return;
+  const button = $("#releaseChamberBtn");
+  button.disabled = true;
+  button.textContent = "Wird geleert …";
+  const { error } = await db.from("deceased_records").update({ chamber_occupied: false, chamber_number: null }).eq("id", id);
+  button.disabled = false;
+  if (error) {
+    button.textContent = `${chamberLabel} leeren`;
+    showToast("Kühlfach konnte nicht geleert werden.");
+    return;
+  }
+  $("#deceasedDialog").close();
+  await loadDeceasedRecords();
+  showToast(`${chamberLabel} wurde geleert. Der Personeneintrag bleibt erhalten.`);
 }
 
 function renderDeceasedRecords() {
@@ -1060,6 +1083,7 @@ $("#closeLabDialogBtn").addEventListener("click", () => $("#labDialog").close())
 $("#cancelLabBtn").addEventListener("click", () => $("#labDialog").close());
 $("#closeDeceasedDialogBtn").addEventListener("click", () => $("#deceasedDialog").close());
 $("#cancelDeceasedBtn").addEventListener("click", () => $("#deceasedDialog").close());
+$("#releaseChamberBtn").addEventListener("click", releaseDeceasedChamber);
 $("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#cancelIncidentBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#newPatientBtn").addEventListener("click", () => openDialog());

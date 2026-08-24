@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=22">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -98,7 +98,7 @@
           <label class="check"><input id="deceasedAutopsyReport" type="checkbox"> Obduktionsbericht liegt vor</label>
         </div>
       </div>
-      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelDeceasedBtn" class="button" type="button">Abbrechen</button><button id="saveDeceasedBtn" class="button button-primary" type="submit">Person speichern</button></div>
+      <div class="dialog-footer"><button id="releaseChamberBtn" class="button button-warning hidden" type="button">Kühlfach leeren</button><div class="footer-spacer"></div><button id="cancelDeceasedBtn" class="button" type="button">Abbrechen</button><button id="saveDeceasedBtn" class="button button-primary" type="submit">Person speichern</button></div>
     </form>
   </dialog>
 
@@ -332,6 +332,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

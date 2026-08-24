@@ -94,7 +94,7 @@ Labor Requests enthalten Patientenname, Telefonnummer, eine optionale Probennumm
 
 ## Totenübersicht
 
-Die Totenübersicht dokumentiert Patientenname, Todesdatum, vermuteten Todesumstand, Ansprechpartner beziehungsweise weitere Informationen und ein optionales Beisetzungsdatum. Obduktionsfreigabe und vorhandener Obduktionsbericht werden als Status angezeigt. Die Belegung aller 16 Kühlfächer ist direkt sichtbar; ein Fach kann technisch nicht doppelt vergeben werden. Ersteller, letzte Bearbeitung und Zeitpunkt werden automatisch über den angemeldeten Benutzer protokolliert.
+Die Totenübersicht dokumentiert Patientenname, Todesdatum, vermuteten Todesumstand, Ansprechpartner beziehungsweise weitere Informationen und ein optionales Beisetzungsdatum. Obduktionsfreigabe und vorhandener Obduktionsbericht werden als Status angezeigt. Die Belegung aller 16 Kühlfächer ist direkt sichtbar; ein Fach kann technisch nicht doppelt vergeben und über den Bearbeitungsdialog wieder geleert werden. Der Personeneintrag bleibt dabei erhalten. Ersteller, letzte Bearbeitung und Zeitpunkt werden automatisch über den angemeldeten Benutzer protokolliert.
 
 ## Weitere Benutzer freigeben
 
