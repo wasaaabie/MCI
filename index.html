@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
-  <title>MANV Board</title>
+  <title>MCI Board</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="app-header">
     <div>
       <p class="eyebrow">Einsatzdokumentation</p>
-      <h1>MANV Board</h1>
+      <h1>MCI Board</h1>
     </div>
     <div class="header-actions">
       <span id="saveState" class="save-state">Lokal gespeichert</span>
@@ -26,7 +26,6 @@
       <div class="summary-card category-red"><span>SK I · Rot</span><strong id="countRed">0</strong></div>
       <div class="summary-card category-yellow"><span>SK II · Gelb</span><strong id="countYellow">0</strong></div>
       <div class="summary-card category-green"><span>SK III · Grün</span><strong id="countGreen">0</strong></div>
-      <div class="summary-card category-blue"><span>SK IV · Blau</span><strong id="countBlue">0</strong></div>
       <div class="summary-card category-black"><span>Verstorben</span><strong id="countBlack">0</strong></div>
     </section>
 
@@ -42,16 +41,10 @@
           <option value="red">SK I · Rot</option>
           <option value="yellow">SK II · Gelb</option>
           <option value="green">SK III · Grün</option>
-          <option value="blue">SK IV · Blau</option>
           <option value="black">Verstorben · Schwarz</option>
           <option value="unassigned">Nicht eingestuft</option>
         </select>
       </label>
-      <div class="toolbar-actions">
-        <button id="printBtn" class="button" type="button">Drucken</button>
-        <button id="exportBtn" class="button" type="button">JSON exportieren</button>
-        <label class="button file-button">JSON importieren<input id="importInput" type="file" accept="application/json,.json"></label>
-      </div>
     </section>
 
     <section id="emptyState" class="empty-state">
@@ -84,7 +77,7 @@
             <label class="field"><span>Geschlecht</span><select id="gender"><option value="">Keine Angabe</option><option>Männlich</option><option>Weiblich</option><option>Divers</option><option>Unbekannt</option></select></label>
             <label class="field"><span>Alter / Geburtsdatum</span><input id="age" autocomplete="off" placeholder="z. B. 42 oder 12.05.1984"></label>
             <label class="field field-wide"><span>Beschreibung der Person</span><textarea id="description" rows="2" placeholder="Kleidung, Statur, besondere Merkmale …"></textarea></label>
-            <label class="field"><span>Triage-Einstufung *</span><select id="triage" required><option value="unassigned">Noch nicht eingestuft</option><option value="red">SK I · Rot – sofort</option><option value="yellow">SK II · Gelb – dringend</option><option value="green">SK III · Grün – nachrangig</option><option value="blue">SK IV · Blau – abwartend</option><option value="black">Schwarz – verstorben</option></select></label>
+            <label class="field"><span>Triage-Einstufung *</span><select id="triage" required><option value="unassigned">Noch nicht eingestuft</option><option value="red">SK I · Rot – sofort</option><option value="yellow">SK II · Gelb – dringend</option><option value="green">SK III · Grün – nachrangig</option><option value="black">Schwarz – verstorben</option></select></label>
             <label class="field"><span>Zeitpunkt der Sichtung</span><input id="triageTime" type="datetime-local"></label>
           </div>
         </section>
@@ -97,7 +90,7 @@
             <label class="field"><span>Behandelnde Einheit vor Ort</span><input id="unitOnSite" autocomplete="off" placeholder="z. B. RTW 1/83-1"></label>
             <label class="field"><span>Behandlungsplatz / Übergabe an</span><input id="treatmentArea" autocomplete="off" placeholder="z. B. BHP Rot, Zelt 2"></label>
             <label class="field"><span>Transportmittel / Einheit</span><input id="transportUnit" autocomplete="off" placeholder="z. B. RTW 2/83-1"></label>
-            <label class="field"><span>Zielkrankenhaus</span><input id="destinationHospital" autocomplete="off" placeholder="Krankenhaus / Zielort"></label>
+            <label class="field"><span>Zielkrankenhaus</span><select id="destinationHospital"><option value="">Noch nicht festgelegt</option><option value="EMT">EMT</option><option value="SSMC">SSMC</option></select></label>
           </div>
           <div class="check-grid">
             <label class="check"><input id="treatedOnSite" type="checkbox"><span>Vor Ort behandelt</span></label>

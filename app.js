@@ -1,9 +1,9 @@
-const STORAGE_KEY = "manv-board-patients-v1";
+const STORAGE_KEY = "mci-board-patients-v1";
+const LEGACY_STORAGE_KEY = ["man", "v-board-patients-v1"].join("");
 const triageLabels = {
   red: "SK I · Rot",
   yellow: "SK II · Gelb",
   green: "SK III · Grün",
-  blue: "SK IV · Blau",
   black: "Verstorben",
   unassigned: "Ohne Einstufung"
 };
@@ -23,7 +23,8 @@ let toastTimer;
 
 function loadPatients() {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY) || "[]";
+    const value = JSON.parse(stored);
     return Array.isArray(value) ? value : [];
   } catch {
     return [];
@@ -53,7 +54,7 @@ function render() {
     .filter(patient => !query || [patient.name, patient.patientNumber, patient.unitOnSite, patient.treatmentArea, patient.destinationHospital].some(value => String(value || "").toLocaleLowerCase("de").includes(query)))
     .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
-  ["red", "yellow", "green", "blue", "black"].forEach(category => {
+  ["red", "yellow", "green", "black"].forEach(category => {
     $(`#count${category[0].toUpperCase()}${category.slice(1)}`).textContent = patients.filter(patient => patient.triage === category).length;
   });
   $("#countAll").textContent = patients.length;
@@ -144,39 +145,12 @@ function showToast(message) {
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 2600);
 }
 
-function exportData() {
-  const data = { application: "MANV Board", version: 1, exportedAt: new Date().toISOString(), patients };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url; link.download = `manv-board-${new Date().toISOString().slice(0, 10)}.json`; link.click();
-  URL.revokeObjectURL(url);
-  showToast("Datensicherung exportiert.");
-}
-
-$("#importInput").addEventListener("change", async event => {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    const data = JSON.parse(await file.text());
-    const imported = Array.isArray(data) ? data : data.patients;
-    if (!Array.isArray(imported)) throw new Error("Ungültiges Format");
-    if (!confirm(`${imported.length} Datensätze importieren? Vorhandene Datensätze mit gleicher ID werden ersetzt.`)) return;
-    const merged = new Map(patients.map(patient => [patient.id, patient]));
-    imported.forEach(patient => { if (patient && typeof patient === "object" && patient.id) merged.set(patient.id, patient); });
-    patients = [...merged.values()]; savePatients(); render(); showToast("Datensicherung importiert.");
-  } catch { showToast("Import fehlgeschlagen: ungültige JSON-Datei."); }
-  finally { event.target.value = ""; }
-});
-
 $("#newPatientBtn").addEventListener("click", () => openDialog());
 $("#emptyNewBtn").addEventListener("click", () => openDialog());
 $("#closeDialogBtn").addEventListener("click", () => dialog.close());
 $("#cancelBtn").addEventListener("click", () => dialog.close());
 $("#searchInput").addEventListener("input", render);
 $("#triageFilter").addEventListener("change", render);
-$("#exportBtn").addEventListener("click", exportData);
-$("#printBtn").addEventListener("click", () => window.print());
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 
 render();

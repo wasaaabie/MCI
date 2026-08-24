@@ -11,7 +11,6 @@
   --red: #f04444;
   --yellow: #f0b429;
   --green: #36b37e;
-  --blue: #4c9aff;
   --black: #8d96a5;
   --radius: 14px;
 }
@@ -31,12 +30,12 @@ h1 { margin-bottom: 0; font-size: clamp(1.45rem, 3vw, 2rem); letter-spacing: -.0
 .save-state { color: var(--muted); font-size: .8rem; }
 main { max-width: 1440px; margin: 0 auto; padding: 28px 24px 64px; }
 
-.summary { display: grid; grid-template-columns: repeat(6, minmax(125px, 1fr)); gap: 12px; }
+.summary { display: grid; grid-template-columns: repeat(5, minmax(125px, 1fr)); gap: 12px; }
 .summary-card { position: relative; overflow: hidden; padding: 18px; background: rgba(18,26,38,.8); border: 1px solid var(--border); border-radius: var(--radius); }
 .summary-card::after { content: ""; position: absolute; inset: auto 0 0; height: 3px; background: var(--border); }
 .summary-card span { display: block; color: var(--muted); font-size: .78rem; font-weight: 700; }
 .summary-card strong { display: block; margin-top: 8px; font-size: 1.8rem; }
-.category-red::after { background: var(--red); }.category-yellow::after { background: var(--yellow); }.category-green::after { background: var(--green); }.category-blue::after { background: var(--blue); }.category-black::after { background: var(--black); }
+.category-red::after { background: var(--red); }.category-yellow::after { background: var(--yellow); }.category-green::after { background: var(--green); }.category-black::after { background: var(--black); }
 
 .toolbar { display: flex; gap: 12px; margin: 24px 0; }
 .search-field { flex: 1; }
@@ -48,7 +47,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .button:hover { background: #223044; }.button:active { transform: translateY(1px); }
 .button-primary { background: var(--accent); border-color: var(--accent); color: #fff; }.button-primary:hover { background: var(--accent-hover); }
 .button-danger { color: #ff9a8f; border-color: rgba(240,68,68,.4); background: rgba(240,68,68,.1); }
-.file-button input { display: none; }
 
 .empty-state { padding: 80px 20px; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius); }
 .empty-state p { color: var(--muted); }.empty-icon { width: 52px; height: 52px; margin: 0 auto 18px; display: grid; place-items: center; color: var(--accent); background: rgba(255,91,69,.1); border: 1px solid rgba(255,91,69,.35); border-radius: 50%; font-size: 2rem; }
@@ -56,11 +54,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .patient-card { position: relative; overflow: hidden; padding: 19px; background: linear-gradient(145deg, rgba(24,35,50,.95), rgba(18,26,38,.95)); border: 1px solid var(--border); border-radius: var(--radius); transition: transform .18s, border-color .18s; }
 .patient-card:hover { transform: translateY(-2px); border-color: #43536a; }
 .patient-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--black); }
-.patient-card[data-triage="red"]::before { background: var(--red); }.patient-card[data-triage="yellow"]::before { background: var(--yellow); }.patient-card[data-triage="green"]::before { background: var(--green); }.patient-card[data-triage="blue"]::before { background: var(--blue); }
+.patient-card[data-triage="red"]::before { background: var(--red); }.patient-card[data-triage="yellow"]::before { background: var(--yellow); }.patient-card[data-triage="green"]::before { background: var(--green); }
 .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .patient-card h2 { margin-bottom: 4px; font-size: 1.12rem; }.patient-no { color: var(--muted); font-size: .78rem; }
 .triage-badge { flex: none; padding: 5px 8px; border-radius: 6px; color: #fff; background: var(--black); font-size: .7rem; font-weight: 850; text-transform: uppercase; }
-.triage-badge.red { background: var(--red); }.triage-badge.yellow { color: #18130a; background: var(--yellow); }.triage-badge.green { background: var(--green); }.triage-badge.blue { background: var(--blue); }
+.triage-badge.red { background: var(--red); }.triage-badge.yellow { color: #18130a; background: var(--yellow); }.triage-badge.green { background: var(--green); }
 .card-details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; padding: 14px 0; border-block: 1px solid var(--border); }
 .detail span { display: block; margin-bottom: 3px; color: var(--muted); font-size: .68rem; font-weight: 750; text-transform: uppercase; }.detail strong { display: block; overflow: hidden; font-size: .86rem; text-overflow: ellipsis; white-space: nowrap; }
 .status-row { min-height: 24px; display: flex; flex-wrap: wrap; gap: 6px; }.status-chip { padding: 4px 7px; color: #b9c6d6; background: #202d3e; border-radius: 5px; font-size: .69rem; font-weight: 700; }

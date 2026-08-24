@@ -1,16 +1,15 @@
-# MANV Board
+# MCI Board
 
-Eine einfache, responsive Web-App zur Patientendokumentation bei einem Massenanfall von Verletzten (MANV).
+Eine einfache, responsive Web-App zur Patientendokumentation bei einem Major Casualty Incident (MCI).
 
 ## Funktionen
 
 - Patientenstammdaten, Personenbeschreibung und Verletzungsmuster
-- Triage nach Sichtungskategorien SK I–IV sowie „verstorben“
+- Triage nach Rot, Gelb und Grün sowie „verstorben“
 - Dokumentation von Medikation, Maßnahmen, Einheiten, Behandlungsplatz und Transportziel
 - Status vor Ort und im Krankenhaus
-- Suche, Filter, Einsatzübersicht und Druckansicht
+- Suche, Filter und Einsatzübersicht
 - Lokale Speicherung im Browser
-- JSON-Export und -Import zur Datensicherung
 
 ## Lokal starten
 
