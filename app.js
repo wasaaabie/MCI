@@ -17,6 +17,8 @@ const fields = [
 const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged"];
 
 let patients = [];
+let incidents = [];
+let currentIncident = null;
 let db = null;
 let currentUser = null;
 let activeUserId = "";
@@ -88,15 +90,16 @@ async function applySession(session) {
   $("#userEmail").textContent = membership.display_name || user.email || "Einsatzkonto";
   $("#authGate").classList.add("hidden");
   $("#appHeader").classList.remove("hidden");
-  $("#appMain").classList.remove("hidden");
   setAuthError("");
-  await loadRemotePatients();
+  await loadIncidents();
+  showIncidentOverview();
   startRealtime();
 }
 
 function showLogin() {
   $("#authGate").classList.remove("hidden");
   $("#appHeader").classList.add("hidden");
+  $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   if (dialog.open) dialog.close();
 }
@@ -106,12 +109,33 @@ function setAuthError(message) {
   $("#loginError").classList.toggle("hidden", !message);
 }
 
-async function loadRemotePatients() {
+async function loadIncidents() {
   if (!db || !currentUser) return;
+  const { data, error } = await db
+    .from("incidents")
+    .select("id, title, location, description, status, started_at, closed_at, created_at, updated_at")
+    .order("started_at", { ascending: false });
+  if (error) {
+    showToast("MCI-Liste konnte nicht geladen werden.");
+    return;
+  }
+  const { data: patientRefs } = await db.from("patients").select("incident_id");
+  const counts = (patientRefs || []).reduce((result, row) => {
+    result[row.incident_id] = (result[row.incident_id] || 0) + 1;
+    return result;
+  }, {});
+  incidents = (data || []).map(incident => ({ ...incident, patientCount: counts[incident.id] || 0 }));
+  if (currentIncident) currentIncident = incidents.find(item => item.id === currentIncident.id) || currentIncident;
+  renderIncidents();
+}
+
+async function loadRemotePatients() {
+  if (!db || !currentUser || !currentIncident) return;
   $("#saveState").textContent = "Synchronisiere …";
   const { data, error } = await db
     .from("patients")
-    .select("id, data, created_at, updated_at")
+    .select("id, data, created_at, updated_at, incident_id")
+    .eq("incident_id", currentIncident.id)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -134,10 +158,16 @@ async function loadRemotePatients() {
 function startRealtime() {
   stopRealtime();
   realtimeChannel = db
-    .channel("mci-patients-live")
+    .channel("mci-board-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "incidents" }, () => {
+      loadIncidents();
+    })
     .on("postgres_changes", { event: "*", schema: "public", table: "patients" }, () => {
       clearTimeout(reloadTimer);
-      reloadTimer = setTimeout(loadRemotePatients, 150);
+      reloadTimer = setTimeout(() => {
+        loadIncidents();
+        if (currentIncident) loadRemotePatients();
+      }, 150);
     })
     .subscribe();
 }
@@ -146,6 +176,79 @@ function stopRealtime() {
   clearTimeout(reloadTimer);
   if (realtimeChannel && db) db.removeChannel(realtimeChannel);
   realtimeChannel = null;
+}
+
+function renderIncidents() {
+  const active = incidents.filter(item => item.status === "active");
+  const closed = incidents.filter(item => item.status === "closed");
+  $("#activeIncidentGrid").innerHTML = active.length
+    ? active.map(incidentCard).join("")
+    : `<div class="incident-empty">Aktuell läuft keine MCI. Lege ein neues Einsatzblatt an.</div>`;
+  $("#closedIncidentGrid").innerHTML = closed.length
+    ? closed.map(incidentCard).join("")
+    : `<div class="incident-empty">Noch keine abgeschlossenen MCIs vorhanden.</div>`;
+  $("#historyCount").textContent = closed.length;
+  document.querySelectorAll("[data-incident-id]").forEach(button => {
+    button.addEventListener("click", () => openIncident(button.dataset.incidentId));
+  });
+}
+
+function incidentCard(incident) {
+  const closed = incident.status === "closed";
+  return `<article class="incident-card ${closed ? "closed" : "active"}">
+    <div class="incident-card-top">
+      <div><h3>${escapeHtml(incident.title)}</h3><p>${escapeHtml(incident.location || "Ohne Ortsangabe")}</p></div>
+      <span class="incident-state${closed ? " closed" : ""}">${closed ? "Abgeschlossen" : "Aktiv"}</span>
+    </div>
+    <div class="incident-card-details">
+      <div><span>Beginn</span><strong>${formatDate(incident.started_at)}</strong></div>
+      <div><span>Patienten</span><strong>${incident.patientCount || 0}</strong></div>
+    </div>
+    <div class="incident-card-footer">
+      <small>${closed ? `Beendet ${formatDate(incident.closed_at)}` : "Laufender Einsatz"}</small>
+      <button class="edit-button" type="button" data-incident-id="${incident.id}">${closed ? "Historie öffnen" : "MCI öffnen"}</button>
+    </div>
+  </article>`;
+}
+
+function showIncidentOverview() {
+  currentIncident = null;
+  patients = [];
+  $("#pageTitle").textContent = "MCI Übersicht";
+  $("#incidentMain").classList.remove("hidden");
+  $("#appMain").classList.add("hidden");
+  $("#backToIncidentsBtn").classList.add("hidden");
+  $("#closeIncidentBtn").classList.add("hidden");
+  $("#newPatientBtn").classList.add("hidden");
+  $("#newIncidentBtn").classList.remove("hidden");
+  $("#saveState").textContent = "Live synchronisiert";
+  renderIncidents();
+}
+
+async function openIncident(id) {
+  const incident = incidents.find(item => item.id === id);
+  if (!incident) return;
+  currentIncident = incident;
+  const closed = incident.status === "closed";
+  $("#incidentMain").classList.add("hidden");
+  $("#appMain").classList.remove("hidden");
+  $("#pageTitle").textContent = incident.title;
+  $("#incidentTitle").textContent = incident.title;
+  $("#incidentStatusLabel").textContent = closed ? "Abgeschlossene MCI" : "Aktive MCI";
+  $("#incidentMeta").textContent = `${incident.location || "Ohne Ortsangabe"} · Beginn ${formatDate(incident.started_at)}`;
+  $("#readOnlyBadge").classList.toggle("hidden", !closed);
+  $("#backToIncidentsBtn").classList.remove("hidden");
+  $("#newIncidentBtn").classList.add("hidden");
+  $("#newPatientBtn").classList.toggle("hidden", closed);
+  $("#closeIncidentBtn").classList.toggle("hidden", closed);
+  await loadRemotePatients();
+}
+
+function openIncidentDialog() {
+  $("#incidentForm").reset();
+  $("#newIncidentStartedAt").value = localDateTimeValue(new Date());
+  $("#incidentDialog").showModal();
+  setTimeout(() => $("#newIncidentTitle").focus(), 50);
 }
 
 function readLocalPatients() {
@@ -159,10 +262,12 @@ function readLocalPatients() {
 }
 
 async function offerLocalMigration() {
-  if (migrationChecked || patients.length || localStorage.getItem(MIGRATION_KEY)) return;
+  if (migrationChecked || !currentIncident || localStorage.getItem(MIGRATION_KEY)) return;
   migrationChecked = true;
   const localPatients = readLocalPatients();
   if (!localPatients.length) return;
+  const { count } = await db.from("patients").select("id", { count: "exact", head: true });
+  if (count) return;
   if (!confirm(`${localPatients.length} lokal gespeicherte Datensätze in die gemeinsame Datenbank übernehmen?`)) return;
 
   const rows = localPatients.map(item => {
@@ -170,6 +275,7 @@ async function offerLocalMigration() {
     return {
       id: patient.id,
       data: patient,
+      incident_id: currentIncident.id,
       updated_by: currentUser.id,
       updated_at: patient.updatedAt || new Date().toISOString()
     };
@@ -251,16 +357,17 @@ function patientCard(patient) {
       <div class="detail"><span>Sichtung</span><strong>${formatDate(patient.triageTime)}</strong></div>
     </div>
     <div class="status-row">${statuses.length ? statuses.map(status => `<span class="status-chip ${status.style}">${status.label}</span>`).join("") : `<span class="status-chip">Status offen</span>`}</div>
-    <div class="card-footer"><span class="updated-at">Aktualisiert ${formatDate(patient.updatedAt)}</span><button class="edit-button" type="button" data-edit-id="${escapeHtml(patient.id)}">Öffnen</button></div>
+    <div class="card-footer"><span class="updated-at">Aktualisiert ${formatDate(patient.updatedAt)}</span><button class="edit-button" type="button" data-edit-id="${escapeHtml(patient.id)}">${currentIncident?.status === "closed" ? "Ansehen" : "Öffnen"}</button></div>
   </article>`;
 }
 
 function openDialog(id = "") {
   form.reset();
+  const readOnly = currentIncident?.status === "closed";
   $("#patientId").value = id;
   const patient = patients.find(item => item.id === id);
-  $("#dialogTitle").textContent = patient ? "Patient bearbeiten" : "Patient anlegen";
-  $("#deleteBtn").classList.toggle("hidden", !patient);
+  $("#dialogTitle").textContent = readOnly ? "Patient ansehen" : patient ? "Patient bearbeiten" : "Patient anlegen";
+  $("#deleteBtn").classList.toggle("hidden", !patient || readOnly);
   if (patient) {
     fields.forEach(field => { $(`#${field}`).value = patient[field] || (field === "triage" ? "unassigned" : ""); });
     checkFields.forEach(field => { $(`#${field}`).checked = Boolean(patient[field]); });
@@ -269,6 +376,9 @@ function openDialog(id = "") {
     $("#triageTime").value = localDateTimeValue(new Date());
     $("#patientNumber").value = nextPatientNumber();
   }
+  form.querySelectorAll("input, select, textarea").forEach(control => { control.disabled = readOnly; });
+  $("#savePatientBtn").classList.toggle("hidden", readOnly);
+  $("#cancelBtn").textContent = readOnly ? "Schließen" : "Abbrechen";
   renderTriageHistory(patient);
   dialog.showModal();
   setTimeout(() => $("#name").focus(), 50);
@@ -318,7 +428,7 @@ function renderTriageHistory(patient, pendingTriage = "") {
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
-  if (!form.reportValidity() || !currentUser) return;
+  if (!form.reportValidity() || !currentUser || currentIncident?.status !== "active") return;
   const button = $("#savePatientBtn");
   button.disabled = true;
   button.textContent = "Speichert …";
@@ -326,6 +436,7 @@ form.addEventListener("submit", async event => {
   const { error } = await db.from("patients").upsert({
     id: patient.id,
     data: patient,
+    incident_id: currentIncident.id,
     updated_by: currentUser.id,
     updated_at: patient.updatedAt
   });
@@ -344,6 +455,7 @@ form.addEventListener("submit", async event => {
 });
 
 $("#deleteBtn").addEventListener("click", async () => {
+  if (currentIncident?.status !== "active") return;
   const id = $("#patientId").value;
   const patient = patients.find(item => item.id === id);
   if (!patient || !confirm(`Datensatz „${patient.name}“ wirklich löschen?`)) return;
@@ -367,6 +479,49 @@ function showToast(message) {
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3000);
 }
 
+$("#incidentForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!$("#incidentForm").reportValidity() || !currentUser) return;
+  const button = $("#saveIncidentBtn");
+  button.disabled = true;
+  button.textContent = "Wird angelegt …";
+  const incident = {
+    id: createUuid(),
+    title: $("#newIncidentTitle").value.trim(),
+    location: $("#newIncidentLocation").value.trim(),
+    description: $("#newIncidentDescription").value.trim(),
+    status: "active",
+    started_at: new Date($("#newIncidentStartedAt").value).toISOString(),
+    created_by: currentUser.id,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await db.from("incidents").insert(incident);
+  button.disabled = false;
+  button.textContent = "MCI anlegen";
+  if (error) {
+    showToast("MCI konnte nicht angelegt werden.");
+    return;
+  }
+  $("#incidentDialog").close();
+  await loadIncidents();
+  await openIncident(incident.id);
+  showToast("Neue MCI wurde angelegt.");
+});
+
+$("#closeIncidentBtn").addEventListener("click", async () => {
+  if (!currentIncident || currentIncident.status !== "active") return;
+  if (!confirm(`MCI „${currentIncident.title}“ abschließen? Danach ist das Einsatzblatt schreibgeschützt.`)) return;
+  const closedAt = new Date().toISOString();
+  const { error } = await db.from("incidents").update({ status: "closed", closed_at: closedAt, updated_at: closedAt }).eq("id", currentIncident.id);
+  if (error) {
+    showToast("MCI konnte nicht abgeschlossen werden.");
+    return;
+  }
+  await loadIncidents();
+  showIncidentOverview();
+  showToast("MCI abgeschlossen und in die Historie verschoben.");
+});
+
 $("#loginForm").addEventListener("submit", async event => {
   event.preventDefault();
   if (!db) return;
@@ -386,6 +541,11 @@ $("#loginForm").addEventListener("submit", async event => {
 $("#logoutBtn").addEventListener("click", async () => {
   if (db) await db.auth.signOut();
 });
+$("#newIncidentBtn").addEventListener("click", openIncidentDialog);
+$("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
+$("#backToIncidentsBtn").addEventListener("click", showIncidentOverview);
+$("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog").close());
+$("#cancelIncidentBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#newPatientBtn").addEventListener("click", () => openDialog());
 $("#emptyNewBtn").addEventListener("click", () => openDialog());
 $("#closeDialogBtn").addEventListener("click", () => dialog.close());
@@ -397,5 +557,6 @@ $("#triage").addEventListener("change", event => {
   renderTriageHistory(patient, event.target.value);
 });
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
+$("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
 
 initialize();

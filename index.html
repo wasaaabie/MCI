@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -33,16 +33,35 @@
   <header id="appHeader" class="app-header hidden">
     <div>
       <p class="eyebrow">Incident Report</p>
-      <h1>MCI Board</h1>
+      <h1 id="pageTitle">MCI Übersicht</h1>
     </div>
     <div class="header-actions">
       <div class="session-info"><span id="userEmail"></span><button id="logoutBtn" class="logout-button" type="button">Abmelden</button></div>
       <span id="saveState" class="save-state">Synchronisiert</span>
-      <button id="newPatientBtn" class="button button-primary" type="button">+ Patient anlegen</button>
+      <button id="backToIncidentsBtn" class="button hidden" type="button">← MCI Übersicht</button>
+      <button id="closeIncidentBtn" class="button button-danger hidden" type="button">MCI abschließen</button>
+      <button id="newIncidentBtn" class="button button-primary" type="button">+ MCI anlegen</button>
+      <button id="newPatientBtn" class="button button-primary hidden" type="button">+ Patient anlegen</button>
     </div>
   </header>
 
+  <main id="incidentMain" class="hidden">
+    <section class="incident-intro">
+      <div><p class="eyebrow">Einsatzverwaltung</p><h2>Aktive MCIs</h2><p>Öffne einen laufenden Einsatz oder lege eine neue MCI an.</p></div>
+      <button id="newIncidentMainBtn" class="button button-primary" type="button">+ Neue MCI</button>
+    </section>
+    <section id="activeIncidentGrid" class="incident-grid" aria-live="polite"></section>
+    <section class="history-section">
+      <div class="history-heading"><div><p class="eyebrow">Archiv</p><h2>Abgeschlossene MCIs</h2></div><span id="historyCount" class="history-count">0</span></div>
+      <section id="closedIncidentGrid" class="incident-grid" aria-live="polite"></section>
+    </section>
+  </main>
+
   <main id="appMain" class="hidden">
+    <section id="incidentContext" class="incident-context">
+      <div><p class="eyebrow" id="incidentStatusLabel">Aktive MCI</p><h2 id="incidentTitle"></h2><p id="incidentMeta"></p></div>
+      <span id="readOnlyBadge" class="readonly-badge hidden">Historie · schreibgeschützt</span>
+    </section>
     <section class="summary" aria-label="Einsatzübersicht">
       <div class="summary-card"><span>Gesamt</span><strong id="countAll">0</strong></div>
       <div class="summary-card category-red"><span>SK I · Rot</span><strong id="countRed">0</strong></div>
@@ -84,6 +103,28 @@
 
     <section id="patientGrid" class="patient-grid" aria-live="polite"></section>
   </main>
+
+  <dialog id="incidentDialog" class="incident-dialog">
+    <form id="incidentForm" method="dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Neues Einsatzblatt</p><h2>MCI anlegen</h2></div>
+        <button id="closeIncidentDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button>
+      </div>
+      <div class="form-body">
+        <div class="form-grid">
+          <label class="field"><span>Name der MCI *</span><input id="newIncidentTitle" required autocomplete="off" placeholder="z. B. Highway Collision"></label>
+          <label class="field"><span>Einsatzort</span><input id="newIncidentLocation" autocomplete="off" placeholder="Ort / Einsatzstelle"></label>
+          <label class="field"><span>Startzeit *</span><input id="newIncidentStartedAt" type="datetime-local" required></label>
+          <label class="field field-wide"><span>Beschreibung</span><textarea id="newIncidentDescription" rows="3" placeholder="Lage und weitere Informationen …"></textarea></label>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <div class="footer-spacer"></div>
+        <button id="cancelIncidentBtn" class="button" type="button">Abbrechen</button>
+        <button id="saveIncidentBtn" class="button button-primary" type="submit">MCI anlegen</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="patientDialog">
     <form id="patientForm" method="dialog">
@@ -161,6 +202,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

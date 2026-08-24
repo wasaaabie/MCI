@@ -5,6 +5,8 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 ## Funktionen
 
 - Login mit freigegebenen Einsatzkonten
+- Eigene Einsatzblätter für jede MCI
+- Abschluss laufender MCIs und schreibgeschützte Historie
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
 - Automatische Live-Aktualisierung
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
@@ -23,6 +25,10 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 5. **Run** ausführen.
 
 Damit werden die Patiententabelle, die Mitgliederliste, Live-Updates und sämtliche Zugriffsregeln angelegt.
+
+### Bestehende Installation aktualisieren
+
+Nach einem Update den aktuellen Inhalt von `supabase.sql` erneut vollständig im SQL Editor ausführen. Vorhandene Patienten ohne MCI-Zuordnung werden automatisch in einer abgeschlossenen **„Übernommene MCI“** archiviert. Anschließend die aktualisierten Dateien zu GitHub pushen.
 
 ## 2. Erstes Benutzerkonto anlegen
 
@@ -66,6 +72,10 @@ Anschließend im GitHub-Repository unter **Settings → Pages** einstellen:
 - Ordner: **/(root)**
 
 Nach der Veröffentlichung zeigt die URL zunächst die Anmeldung. Nur gültige und in `mci_members` freigegebene Konten können das Board und seine Daten öffnen.
+
+## MCI-Workflow
+
+Nach dem Login erscheint die MCI-Übersicht. Zuerst wird eine MCI mit Name, Einsatzort, Startzeit und optionaler Beschreibung angelegt. Patienten gehören ausschließlich zu diesem Einsatzblatt. Über **MCI abschließen** wird der Einsatz in die Historie verschoben. Abgeschlossene MCIs und ihre Patientendaten sind danach schreibgeschützt.
 
 ## Weitere Benutzer freigeben
 
