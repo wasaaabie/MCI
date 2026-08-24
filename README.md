@@ -9,6 +9,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Abschluss laufender MCIs und schreibgeschützte Historie
 - Manipulationsgeschütztes Änderungsprotokoll mit Display Name, Zeitpunkt und geänderten Feldern
 - Gemeinsames Schwarzes Brett mit offenen Einträgen und erledigter Historie
+- Erweiterbare Modulnavigation für zusätzliche Seiten
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
 - Automatische Live-Aktualisierung
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
@@ -83,7 +84,7 @@ Das Änderungsprotokoll speichert ab Installation dieser Version automatisch, we
 
 ## Schwarzes Brett
 
-Das Schwarze Brett ist über die MCI-Übersicht erreichbar. Ein Eintrag enthält Patientenname, Telefonnummer und Anliegen beziehungsweise Vorfall. Ersteller sowie Erstellzeitpunkt werden serverseitig aus der Anmeldung übernommen. Beim Markieren als erledigt speichert Supabase auch die abschließende Person und den Zeitpunkt und verschiebt den Eintrag in die schreibgeschützte Historie.
+Das Schwarze Brett ist über die Modulnavigation erreichbar. Ein Eintrag enthält Patientenname, Telefonnummer und Anliegen beziehungsweise Vorfall. Ersteller sowie Erstellzeitpunkt werden serverseitig aus der Anmeldung übernommen. Offene Einträge können bearbeitet werden; dabei speichert Supabase den letzten Bearbeiter und Änderungszeitpunkt. Beim Markieren als erledigt speichert Supabase auch die abschließende Person und den Zeitpunkt und verschiebt den Eintrag in die schreibgeschützte Historie.
 
 ## Weitere Benutzer freigeben
 

@@ -92,6 +92,7 @@ async function applySession(session) {
   $("#userEmail").textContent = membership.display_name || user.email || "Einsatzkonto";
   $("#authGate").classList.add("hidden");
   $("#appHeader").classList.remove("hidden");
+  $("#appNav").classList.remove("hidden");
   setAuthError("");
   await loadIncidents();
   showIncidentOverview();
@@ -102,6 +103,7 @@ function showLogin() {
   bulletinEntries = [];
   $("#authGate").classList.remove("hidden");
   $("#appHeader").classList.add("hidden");
+  $("#appNav").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
@@ -232,12 +234,11 @@ function showIncidentOverview() {
   $("#bulletinMain").classList.add("hidden");
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
-  $("#backToIncidentsBtn").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.add("hidden");
-  $("#bulletinBoardBtn").classList.remove("hidden");
   $("#newIncidentBtn").classList.remove("hidden");
+  setActiveNav("incidents");
   $("#saveState").textContent = "Live synchronisiert";
   renderIncidents();
 }
@@ -255,12 +256,11 @@ async function openIncident(id) {
   $("#incidentStatusLabel").textContent = closed ? "Abgeschlossene MCI" : "Aktive MCI";
   $("#incidentMeta").textContent = `${incident.location || "Ohne Ortsangabe"} · Scene Lead: ${incident.scene_lead || "Unbekannt"} · Beginn ${formatDate(incident.started_at)}`;
   $("#readOnlyBadge").classList.toggle("hidden", !closed);
-  $("#backToIncidentsBtn").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.add("hidden");
-  $("#bulletinBoardBtn").classList.add("hidden");
   $("#newPatientBtn").classList.toggle("hidden", closed);
   $("#closeIncidentBtn").classList.toggle("hidden", closed);
+  setActiveNav("incidents");
   await loadRemotePatients();
   await loadActivity();
 }
@@ -280,17 +280,32 @@ async function showBulletinBoard() {
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   $("#bulletinMain").classList.remove("hidden");
-  $("#backToIncidentsBtn").classList.remove("hidden");
-  $("#bulletinBoardBtn").classList.add("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.remove("hidden");
+  setActiveNav("bulletin");
   await loadBulletinEntries();
 }
 
-function openBulletinDialog() {
+function setActiveNav(section) {
+  $("#navIncidentsBtn").classList.toggle("active", section === "incidents");
+  $("#navBulletinBtn").classList.toggle("active", section === "bulletin");
+  $("#navIncidentsBtn").setAttribute("aria-current", section === "incidents" ? "page" : "false");
+  $("#navBulletinBtn").setAttribute("aria-current", section === "bulletin" ? "page" : "false");
+}
+
+function openBulletinDialog(id = "") {
   $("#bulletinForm").reset();
+  $("#bulletinEntryId").value = id;
+  const entry = bulletinEntries.find(item => item.id === id);
+  $("#bulletinDialogTitle").textContent = entry ? "Eintrag bearbeiten" : "Eintrag anlegen";
+  $("#saveBulletinBtn").textContent = entry ? "Änderungen speichern" : "Eintrag speichern";
+  if (entry) {
+    $("#bulletinPatientName").value = entry.patient_name;
+    $("#bulletinPhone").value = entry.phone;
+    $("#bulletinConcern").value = entry.concern;
+  }
   $("#bulletinDialog").showModal();
   setTimeout(() => $("#bulletinPatientName").focus(), 50);
 }
@@ -299,7 +314,7 @@ async function loadBulletinEntries() {
   if (!db || !currentUser) return;
   const { data, error } = await db
     .from("bulletin_entries")
-    .select("id, patient_name, phone, concern, status, created_by_name, created_at, completed_by_name, completed_at")
+    .select("id, patient_name, phone, concern, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at")
     .order("created_at", { ascending: false });
   bulletinEntries = error ? [] : (data || []);
   if (error) showToast("Einträge des Schwarzen Bretts konnten nicht geladen werden.");
@@ -314,10 +329,12 @@ function renderBulletinEntries() {
   $("#openBulletinBody").innerHTML = openEntries.length ? openEntries.map(openBulletinRow).join("") : `<tr><td class="table-empty" colspan="6">Keine offenen Einträge vorhanden.</td></tr>`;
   $("#closedBulletinBody").innerHTML = closedEntries.length ? closedEntries.map(closedBulletinRow).join("") : `<tr><td class="table-empty" colspan="6">Noch keine erledigten Einträge vorhanden.</td></tr>`;
   document.querySelectorAll("[data-complete-bulletin]").forEach(button => button.addEventListener("click", () => completeBulletinEntry(button.dataset.completeBulletin)));
+  document.querySelectorAll("[data-edit-bulletin]").forEach(button => button.addEventListener("click", () => openBulletinDialog(button.dataset.editBulletin)));
 }
 
 function openBulletinRow(entry) {
-  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td><strong>${escapeHtml(entry.created_by_name || "Unbekannt")}</strong></td><td class="bulletin-date">${formatDate(entry.created_at)}</td><td><button class="complete-button" type="button" data-complete-bulletin="${entry.id}">Als erledigt markieren</button></td></tr>`;
+  const edited = entry.updated_at ? `<br><small>Bearbeitet von ${escapeHtml(entry.updated_by_name || "Unbekannt")} · ${formatDate(entry.updated_at)}</small>` : "";
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td><strong>${escapeHtml(entry.created_by_name || "Unbekannt")}</strong>${edited}</td><td class="bulletin-date">${formatDate(entry.created_at)}</td><td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-edit-bulletin="${entry.id}">Bearbeiten</button><button class="complete-button" type="button" data-complete-bulletin="${entry.id}">Erledigt</button></div></td></tr>`;
 }
 
 function closedBulletinRow(entry) {
@@ -621,22 +638,25 @@ $("#bulletinForm").addEventListener("submit", async event => {
   const button = $("#saveBulletinBtn");
   button.disabled = true;
   button.textContent = "Speichert …";
-  const { error } = await db.from("bulletin_entries").insert({
-    id: createUuid(),
+  const id = $("#bulletinEntryId").value;
+  const values = {
     patient_name: $("#bulletinPatientName").value.trim(),
     phone: $("#bulletinPhone").value.trim(),
-    concern: $("#bulletinConcern").value.trim(),
-    status: "open"
-  });
+    concern: $("#bulletinConcern").value.trim()
+  };
+  const result = id
+    ? await db.from("bulletin_entries").update({ ...values, status: "open" }).eq("id", id).eq("status", "open")
+    : await db.from("bulletin_entries").insert({ id: createUuid(), ...values, status: "open" });
+  const { error } = result;
   button.disabled = false;
-  button.textContent = "Eintrag speichern";
+  button.textContent = id ? "Änderungen speichern" : "Eintrag speichern";
   if (error) {
     showToast("Eintrag konnte nicht gespeichert werden.");
     return;
   }
   $("#bulletinDialog").close();
   await loadBulletinEntries();
-  showToast("Eintrag wurde angelegt.");
+  showToast(id ? "Eintrag wurde aktualisiert." : "Eintrag wurde angelegt.");
 });
 
 $("#incidentForm").addEventListener("submit", async event => {
@@ -704,10 +724,10 @@ $("#logoutBtn").addEventListener("click", async () => {
 });
 $("#newIncidentBtn").addEventListener("click", openIncidentDialog);
 $("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
-$("#bulletinBoardBtn").addEventListener("click", showBulletinBoard);
-$("#newBulletinBtn").addEventListener("click", openBulletinDialog);
-$("#newBulletinMainBtn").addEventListener("click", openBulletinDialog);
-$("#backToIncidentsBtn").addEventListener("click", showIncidentOverview);
+$("#navIncidentsBtn").addEventListener("click", showIncidentOverview);
+$("#navBulletinBtn").addEventListener("click", showBulletinBoard);
+$("#newBulletinBtn").addEventListener("click", () => openBulletinDialog());
+$("#newBulletinMainBtn").addEventListener("click", () => openBulletinDialog());
 $("#closeBulletinDialogBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#cancelBulletinBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog").close());

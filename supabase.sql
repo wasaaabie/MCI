@@ -52,10 +52,17 @@ create table if not exists public.bulletin_entries (
   created_by uuid not null references auth.users(id),
   created_by_name text not null,
   created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz,
   completed_by uuid references auth.users(id),
   completed_by_name text,
   completed_at timestamptz
 );
+
+alter table public.bulletin_entries add column if not exists updated_by uuid references auth.users(id);
+alter table public.bulletin_entries add column if not exists updated_by_name text;
+alter table public.bulletin_entries add column if not exists updated_at timestamptz;
 
 alter table public.incidents add column if not exists scene_lead text;
 update public.incidents set scene_lead = 'Unbekannt' where scene_lead is null or btrim(scene_lead) = '';
@@ -180,14 +187,22 @@ begin
     new.created_by_name := actor_name;
     new.created_at := now();
     new.status := 'open';
+    new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
     new.completed_by := null; new.completed_by_name := null; new.completed_at := null;
     return new;
   end if;
-  if old.status <> 'open' or new.status <> 'done' then
-    raise exception 'Nur offene Einträge können als erledigt markiert werden.';
+  if old.status <> 'open' then
+    raise exception 'Erledigte Einträge sind schreibgeschützt.';
   end if;
-  new.patient_name := old.patient_name; new.phone := old.phone; new.concern := old.concern;
   new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  if new.status = 'open' then
+    new.updated_by := auth.uid(); new.updated_by_name := actor_name; new.updated_at := now();
+    new.completed_by := null; new.completed_by_name := null; new.completed_at := null;
+    return new;
+  end if;
+  if new.status <> 'done' then raise exception 'Ungültiger Statuswechsel.'; end if;
+  new.patient_name := old.patient_name; new.phone := old.phone; new.concern := old.concern;
+  new.updated_by := old.updated_by; new.updated_by_name := old.updated_by_name; new.updated_at := old.updated_at;
   new.completed_by := auth.uid(); new.completed_by_name := actor_name; new.completed_at := now();
   return new;
 end;
@@ -257,8 +272,11 @@ using (
   and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
 )
 with check (
-  status = 'done' and completed_by = auth.uid()
-  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+  exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+  and (
+    (status = 'open' and updated_by = auth.uid() and completed_by is null)
+    or (status = 'done' and completed_by = auth.uid())
+  )
 );
 
 drop policy if exists "Mitglieder lesen MCIs" on public.incidents;
