@@ -11,7 +11,7 @@ const triageLabels = {
 const fields = [
   "name", "patientNumber", "gender", "age", "description", "triage", "triageTime",
   "injuries", "medication", "unitOnSite", "treatmentArea", "destinationHospital",
-  "physician", "hospitalDepartment", "hospitalNotes", "notes"
+  "physician", "hospitalNotes", "notes"
 ];
 const checkFields = ["treatedOnSite", "idCheckCode7", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged"];
 

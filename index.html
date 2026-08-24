@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
   <header class="app-header">
     <div>
-      <p class="eyebrow">Einsatzdokumentation</p>
+      <p class="eyebrow">Incident Report</p>
       <h1>MCI Board</h1>
     </div>
     <div class="header-actions">
@@ -93,7 +93,6 @@
             <label class="field field-wide"><span>Verletzungen / Befund</span><textarea id="injuries" rows="3" placeholder="Verletzungsmuster und relevante Vitalbefunde …"></textarea></label>
             <label class="field field-wide"><span>Medikation &amp; Maßnahmen</span><textarea id="medication" rows="3" placeholder="Medikament, Dosis, Zeitpunkt sowie weitere Maßnahmen …"></textarea></label>
             <label class="field"><span>Behandelnde Einheit vor Ort</span><input id="unitOnSite" autocomplete="off" placeholder="z. B. Ambulance 65"></label>
-            <label class="field"><span>Behandlungsplatz / Übergabe an</span><input id="treatmentArea" autocomplete="off" placeholder="z. B. Trauma 1, ICU 2"></label>
             <label class="field"><span>Zielkrankenhaus</span><select id="destinationHospital"><option value="">Noch nicht festgelegt</option><option value="EMT">EMT</option><option value="SSMC">SSMC</option></select></label>
           </div>
           <div class="check-grid">
@@ -107,7 +106,7 @@
           <div class="section-heading"><span>03</span><div><h3>Krankenhaus</h3><p>Aufnahme, Behandlung und Entlassung</p></div></div>
           <div class="form-grid">
             <label class="field"><span>Behandelnder Mediziner</span><input id="physician" autocomplete="off" placeholder="Name / Funktion"></label>
-            <label class="field"><span>Station / Fachbereich</span><input id="hospitalDepartment" autocomplete="off" placeholder="z. B. Schockraum, Chirurgie"></label>
+            <label class="field"><span>Behandlungsplatz / Übergabe an</span><input id="treatmentArea" autocomplete="off" placeholder="z. B. Trauma 1, ICU 2"></label>
             <label class="field field-wide"><span>Klinische Notizen</span><textarea id="hospitalNotes" rows="3" placeholder="Diagnose, Verlauf, Besonderheiten …"></textarea></label>
           </div>
           <div class="check-grid hospital-checks">
@@ -132,6 +131,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
