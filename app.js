@@ -1,6 +1,7 @@
 const STORAGE_KEY = "mci-board-patients-v1";
 const LEGACY_STORAGE_KEY = ["man", "v-board-patients-v1"].join("");
 const MIGRATION_KEY = "mci-board-supabase-migration-v1";
+const NAV_COLLAPSED_KEY = "mci-board-nav-collapsed";
 const triageLabels = {
   red: "SK I · Rot",
   yellow: "SK II · Gelb",
@@ -33,6 +34,18 @@ let toastTimer;
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#patientDialog");
 const form = $("#patientForm");
+
+function setNavCollapsed(collapsed) {
+  const nav = $("#appNav");
+  const button = $("#navCollapseBtn");
+  nav.classList.toggle("collapsed", collapsed);
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.setAttribute("aria-label", collapsed ? "Menü ausklappen" : "Menü einklappen");
+  button.title = collapsed ? "Menü ausklappen" : "Menü einklappen";
+  localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? "1" : "0");
+}
+
+setNavCollapsed(localStorage.getItem(NAV_COLLAPSED_KEY) === "1");
 
 function getConfig() {
   const config = window.MCI_CONFIG || {};
@@ -847,6 +860,7 @@ $("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
 $("#navIncidentsBtn").addEventListener("click", showIncidentOverview);
 $("#navBulletinBtn").addEventListener("click", showBulletinBoard);
 $("#navLabBtn").addEventListener("click", showLabRequests);
+$("#navCollapseBtn").addEventListener("click", () => setNavCollapsed(!$("#appNav").classList.contains("collapsed")));
 $("#newBulletinBtn").addEventListener("click", () => openBulletinDialog());
 $("#newBulletinMainBtn").addEventListener("click", () => openBulletinDialog());
 $("#newLabBtn").addEventListener("click", () => openLabDialog());
