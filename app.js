@@ -514,6 +514,15 @@ function setDeceasedChamberState() {
   if (!occupied) select.value = "";
 }
 
+function setAutopsyReportState() {
+  const checked = $("#deceasedAutopsyReport").checked;
+  if (checked) $("#deceasedAutopsyApproved").checked = true;
+  $("#autopsyArchiveWarning").classList.toggle("hidden", !checked);
+  $("#saveDeceasedBtn").textContent = checked
+    ? "Bericht bestätigen & archivieren"
+    : ($("#deceasedEntryId").value ? "Änderungen speichern" : "Person speichern");
+}
+
 function openDeceasedDialog(id = "", preferredChamber = null) {
   $("#deceasedForm").reset();
   $("#deceasedEntryId").value = id;
@@ -541,6 +550,7 @@ function openDeceasedDialog(id = "", preferredChamber = null) {
     }
   }
   setDeceasedChamberState();
+  setAutopsyReportState();
   $("#deceasedDialog").showModal();
   setTimeout(() => $("#deceasedPatientName").focus(), 50);
 }
@@ -578,12 +588,16 @@ async function releaseDeceasedChamber() {
 }
 
 function renderDeceasedRecords() {
-  const occupiedRecords = deceasedRecords.filter(record => record.chamber_occupied && record.chamber_number);
+  const activeRecords = deceasedRecords.filter(record => !record.autopsy_report);
+  const historyRecords = deceasedRecords.filter(record => record.autopsy_report)
+    .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+  const occupiedRecords = activeRecords.filter(record => record.chamber_occupied && record.chamber_number);
   const occupiedByChamber = new Map(occupiedRecords.map(record => [Number(record.chamber_number), record]));
-  $("#deceasedTotalCount").textContent = deceasedRecords.length;
+  $("#deceasedTotalCount").textContent = activeRecords.length;
   $("#deceasedOccupiedCount").textContent = occupiedRecords.length;
   $("#deceasedFreeCount").textContent = Math.max(0, 16 - occupiedRecords.length);
-  $("#deceasedPendingReportsCount").textContent = deceasedRecords.filter(record => record.autopsy_approved && !record.autopsy_report).length;
+  $("#deceasedPendingReportsCount").textContent = activeRecords.filter(record => record.autopsy_approved).length;
+  $("#deceasedHistoryCount").textContent = historyRecords.length;
   $("#chamberGrid").innerHTML = Array.from({ length: 16 }, (_, index) => {
     const number = index + 1;
     const record = occupiedByChamber.get(number);
@@ -591,9 +605,12 @@ function renderDeceasedRecords() {
       ? `<button class="chamber-card occupied" type="button" data-edit-deceased="${record.id}" title="Eintrag von ${escapeHtml(record.patient_name)} öffnen"><span>Fach ${String(number).padStart(2, "0")}</span><strong>${escapeHtml(record.patient_name)}</strong><small>seit ${formatCalendarDate(record.date_of_death)}</small></button>`
       : `<button class="chamber-card" type="button" data-new-deceased-chamber="${number}" title="Person direkt in Fach ${number} erfassen"><span>Fach ${String(number).padStart(2, "0")}</span><strong>Frei</strong><small>anklicken zum Belegen</small></button>`;
   }).join("");
-  $("#deceasedBody").innerHTML = deceasedRecords.length
-    ? deceasedRecords.map(deceasedTableRow).join("")
-    : `<tr><td class="table-empty" colspan="8">Noch keine verstorbenen Personen erfasst.</td></tr>`;
+  $("#deceasedBody").innerHTML = activeRecords.length
+    ? activeRecords.map(deceasedTableRow).join("")
+    : `<tr><td class="table-empty" colspan="8">Keine aktiven Einträge vorhanden.</td></tr>`;
+  $("#deceasedHistoryBody").innerHTML = historyRecords.length
+    ? historyRecords.map(deceasedHistoryTableRow).join("")
+    : `<tr><td class="table-empty" colspan="7">Noch keine abgeschlossenen Einträge vorhanden.</td></tr>`;
   document.querySelectorAll("[data-edit-deceased]").forEach(button => button.addEventListener("click", () => openDeceasedDialog(button.dataset.editDeceased)));
   document.querySelectorAll("[data-new-deceased-chamber]").forEach(button => button.addEventListener("click", () => openDeceasedDialog("", Number(button.dataset.newDeceasedChamber))));
 }
@@ -612,6 +629,12 @@ function deceasedTableRow(record) {
     ? `<span class="chamber-badge">Fach ${String(record.chamber_number).padStart(2, "0")}</span>`
     : `<span class="chamber-badge free">Kein Fach</span>`;
   return `<tr><td><strong>${escapeHtml(record.patient_name)}</strong><small>${audit}</small></td><td class="bulletin-date">${formatCalendarDate(record.date_of_death)}</td><td>${escapeHtml(record.suspected_circumstances)}</td><td>${escapeHtml(record.contact_information || "–")}</td><td class="bulletin-date">${formatCalendarDate(record.burial_date)}</td><td><div class="deceased-status">${approval}${report}</div></td><td>${chamber}</td><td><button class="bulletin-edit-button" type="button" data-edit-deceased="${record.id}">Bearbeiten</button></td></tr>`;
+}
+
+function deceasedHistoryTableRow(record) {
+  const completedBy = record.updated_by_name || record.created_by_name || "Unbekannt";
+  const completedAt = record.updated_at || record.created_at;
+  return `<tr><td><strong>${escapeHtml(record.patient_name)}</strong><small>Obduktionsbericht vorhanden</small></td><td class="bulletin-date">${formatCalendarDate(record.date_of_death)}</td><td>${escapeHtml(record.suspected_circumstances)}</td><td>${escapeHtml(record.contact_information || "–")}</td><td class="bulletin-date">${formatCalendarDate(record.burial_date)}</td><td>${escapeHtml(completedBy)}</td><td class="bulletin-date">${formatDate(completedAt)}</td></tr>`;
 }
 
 async function loadActivity() {
@@ -909,17 +932,18 @@ $("#deceasedForm").addEventListener("submit", async event => {
   setDeceasedChamberState();
   if (!$("#deceasedForm").reportValidity() || !currentUser) return;
   const id = $("#deceasedEntryId").value;
+  const autopsyReport = $("#deceasedAutopsyReport").checked;
   const chamberOccupied = $("#deceasedChamberOccupied").checked;
   const chamberNumber = chamberOccupied ? Number($("#deceasedChamberNumber").value) : null;
-  const chamberConflict = chamberOccupied && deceasedRecords.some(record => record.id !== id && record.chamber_occupied && Number(record.chamber_number) === chamberNumber);
+  const chamberConflict = !autopsyReport && chamberOccupied && deceasedRecords.some(record => record.id !== id && record.chamber_occupied && Number(record.chamber_number) === chamberNumber);
   if (chamberConflict) {
     showToast(`Kühlfach ${String(chamberNumber).padStart(2, "0")} ist bereits belegt.`);
     return;
   }
+  if (autopsyReport && !confirm("Obduktionsbericht wirklich bestätigen? Die Person wird dauerhaft in die Historie verschoben und das zugehörige Kühlfach automatisch geleert.")) return;
   const button = $("#saveDeceasedBtn");
   button.disabled = true;
   button.textContent = "Speichert …";
-  const autopsyReport = $("#deceasedAutopsyReport").checked;
   const values = {
     patient_name: $("#deceasedPatientName").value.trim(),
     date_of_death: $("#deceasedDateOfDeath").value,
@@ -928,22 +952,22 @@ $("#deceasedForm").addEventListener("submit", async event => {
     burial_date: $("#deceasedBurialDate").value || null,
     autopsy_approved: $("#deceasedAutopsyApproved").checked || autopsyReport,
     autopsy_report: autopsyReport,
-    chamber_occupied: chamberOccupied,
-    chamber_number: chamberNumber
+    chamber_occupied: autopsyReport ? false : chamberOccupied,
+    chamber_number: autopsyReport ? null : chamberNumber
   };
   const result = id
     ? await db.from("deceased_records").update(values).eq("id", id)
     : await db.from("deceased_records").insert({ id: createUuid(), ...values });
   const { error } = result;
   button.disabled = false;
-  button.textContent = id ? "Änderungen speichern" : "Person speichern";
+  setAutopsyReportState();
   if (error) {
     showToast(error.code === "23505" ? "Das gewählte Kühlfach wurde zwischenzeitlich belegt." : "Eintrag konnte nicht gespeichert werden.");
     return;
   }
   $("#deceasedDialog").close();
   await loadDeceasedRecords();
-  showToast(id ? "Eintrag wurde aktualisiert." : "Person wurde in der Totenübersicht erfasst.");
+  showToast(autopsyReport ? "Eintrag wurde abgeschlossen, archiviert und das Kühlfach geleert." : (id ? "Eintrag wurde aktualisiert." : "Person wurde in der Totenübersicht erfasst."));
 });
 
 $("#labForm").addEventListener("submit", async event => {
@@ -1097,9 +1121,7 @@ $("#triage").addEventListener("change", event => {
   renderTriageHistory(patient, event.target.value);
 });
 $("#deceasedChamberOccupied").addEventListener("change", setDeceasedChamberState);
-$("#deceasedAutopsyReport").addEventListener("change", event => {
-  if (event.target.checked) $("#deceasedAutopsyApproved").checked = true;
-});
+$("#deceasedAutopsyReport").addEventListener("change", setAutopsyReportState);
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 $("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
 $("#bulletinDialog").addEventListener("click", event => { if (event.target === $("#bulletinDialog")) $("#bulletinDialog").close(); });

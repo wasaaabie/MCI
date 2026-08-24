@@ -298,14 +298,25 @@ declare
 begin
   select display_name into actor_name from public.mci_members where user_id = auth.uid();
   actor_name := coalesce(actor_name, 'Unbekannt');
-  if new.chamber_occupied then
+  if tg_op = 'UPDATE' and old.autopsy_report then
+    if auth.uid() is not null then
+      raise exception 'Abgeschlossene Einträge der Totenübersicht sind schreibgeschützt.';
+    end if;
+    new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+    new.updated_by := old.updated_by; new.updated_by_name := old.updated_by_name; new.updated_at := old.updated_at;
+    return new;
+  end if;
+  if new.autopsy_report then
+    new.autopsy_approved := true;
+    new.chamber_occupied := false;
+    new.chamber_number := null;
+  elsif new.chamber_occupied then
     if new.chamber_number is null or new.chamber_number < 1 or new.chamber_number > 16 then
       raise exception 'Für ein belegtes Fach muss eine Fachnummer zwischen 1 und 16 gewählt werden.';
     end if;
   else
     new.chamber_number := null;
   end if;
-  if new.autopsy_report then new.autopsy_approved := true; end if;
   if tg_op = 'INSERT' then
     new.created_by := auth.uid(); new.created_by_name := actor_name; new.created_at := now();
     new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
@@ -316,6 +327,11 @@ begin
   return new;
 end;
 $$;
+
+-- Bereinigt bestehende abgeschlossene Einträge, ohne deren Protokolldaten zu verändern.
+update public.deceased_records
+set chamber_occupied = false, chamber_number = null
+where autopsy_report and (chamber_occupied or chamber_number is not null);
 
 drop trigger if exists patients_activity_trigger on public.patients;
 create trigger patients_activity_trigger after insert or update or delete on public.patients

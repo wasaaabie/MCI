@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -72,8 +72,12 @@
       <div id="chamberGrid" class="chamber-grid" aria-live="polite"></div>
     </section>
     <section class="board-section deceased-list-section">
-      <div class="history-heading"><div><p class="eyebrow">Register</p><h2>Erfasste Verstorbene</h2></div></div>
+      <div class="history-heading"><div><p class="eyebrow">Register</p><h2>Aktive Einträge</h2></div></div>
       <div class="table-wrap"><table class="bulletin-table deceased-table"><thead><tr><th>Patient</th><th>Todesdatum</th><th>Vermutlicher Todesumstand</th><th>Ansprechpartner / Informationen</th><th>Beisetzung</th><th>Dokumentation</th><th>Kühlfach</th><th></th></tr></thead><tbody id="deceasedBody"></tbody></table></div>
+    </section>
+    <section class="history-section deceased-history-section">
+      <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Abgeschlossene Einträge</h2></div><span id="deceasedHistoryCount" class="history-count">0</span></div>
+      <div class="table-wrap"><table class="bulletin-table deceased-table history-table"><thead><tr><th>Patient</th><th>Todesdatum</th><th>Vermutlicher Todesumstand</th><th>Ansprechpartner / Informationen</th><th>Beisetzung</th><th>Abgeschlossen von</th><th>Abgeschlossen am</th></tr></thead><tbody id="deceasedHistoryBody"></tbody></table></div>
     </section>
   </main>
 
@@ -97,6 +101,7 @@
           <label class="check"><input id="deceasedAutopsyApproved" type="checkbox"> Obduktion freigegeben</label>
           <label class="check"><input id="deceasedAutopsyReport" type="checkbox"> Obduktionsbericht liegt vor</label>
         </div>
+        <div id="autopsyArchiveWarning" class="archive-warning hidden" role="alert"><strong>Achtung: Eintrag wird abgeschlossen</strong><span>Beim Speichern wird die Person in die Historie verschoben und ein belegtes Kühlfach automatisch geleert. Dieser Vorgang kann nicht rückgängig gemacht werden.</span></div>
       </div>
       <div class="dialog-footer"><button id="releaseChamberBtn" class="button button-warning hidden" type="button">Kühlfach leeren</button><div class="footer-spacer"></div><button id="cancelDeceasedBtn" class="button" type="button">Abbrechen</button><button id="saveDeceasedBtn" class="button button-primary" type="submit">Person speichern</button></div>
     </form>
@@ -332,6 +337,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>
