@@ -6,21 +6,43 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
-  <header class="app-header">
+  <section id="authGate" class="auth-gate">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <span class="auth-mark">M</span>
+        <div><p class="eyebrow">Secure Incident Access</p><h1>MCI Board</h1></div>
+      </div>
+      <p class="auth-intro">Melde dich mit deinem freigegebenen Einsatzkonto an.</p>
+      <div id="configWarning" class="config-warning hidden">
+        <strong>Supabase noch nicht eingerichtet</strong>
+        <span>Trage Projekt-URL und Publishable Key in <code>config.js</code> ein.</span>
+      </div>
+      <form id="loginForm" class="login-form">
+        <label class="field"><span>E-Mail-Adresse</span><input id="loginEmail" type="email" autocomplete="username" required placeholder="name@organisation.de"></label>
+        <label class="field"><span>Passwort</span><input id="loginPassword" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
+        <p id="loginError" class="login-error hidden" role="alert"></p>
+        <button id="loginBtn" class="button button-primary" type="submit">Anmelden</button>
+      </form>
+      <p class="auth-note">Konten und Freigaben werden durch die Projektleitung verwaltet.</p>
+    </div>
+  </section>
+
+  <header id="appHeader" class="app-header hidden">
     <div>
       <p class="eyebrow">Incident Report</p>
       <h1>MCI Board</h1>
     </div>
     <div class="header-actions">
-      <span id="saveState" class="save-state">Lokal gespeichert</span>
+      <div class="session-info"><span id="userEmail"></span><button id="logoutBtn" class="logout-button" type="button">Abmelden</button></div>
+      <span id="saveState" class="save-state">Synchronisiert</span>
       <button id="newPatientBtn" class="button button-primary" type="button">+ Patient anlegen</button>
     </div>
   </header>
 
-  <main>
+  <main id="appMain" class="hidden">
     <section class="summary" aria-label="Einsatzübersicht">
       <div class="summary-card"><span>Gesamt</span><strong id="countAll">0</strong></div>
       <div class="summary-card category-red"><span>SK I · Rot</span><strong id="countRed">0</strong></div>
@@ -131,12 +153,14 @@
         <button id="deleteBtn" class="button button-danger hidden" type="button">Patient löschen</button>
         <div class="footer-spacer"></div>
         <button id="cancelBtn" class="button" type="button">Abbrechen</button>
-        <button class="button button-primary" type="submit">Datensatz speichern</button>
+        <button id="savePatientBtn" class="button button-primary" type="submit">Datensatz speichern</button>
       </div>
     </form>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=13"></script>
+  <script src="config.js?v=1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

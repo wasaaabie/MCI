@@ -1,34 +1,83 @@
 # MCI Board
 
-Eine einfache, responsive Web-App zur Patientendokumentation bei einem Major Casualty Incident (MCI).
+Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf GitHub Pages laufen; Anmeldung, Patientendaten und Live-Synchronisierung werden von Supabase bereitgestellt.
 
 ## Funktionen
 
-- Patientenstammdaten, Personenbeschreibung und Verletzungsmuster
-- Triage nach Rot, Gelb und Grün sowie „verstorben“
-- Zeitlicher Triage-Verlauf mit dokumentierten Kategorieänderungen
-- Dokumentation von Medikation, Maßnahmen, Einheiten, Behandlungsplatz und Transportziel
-- Status vor Ort und im Krankenhaus
-- Suche, Filter und Einsatzübersicht
-- Farbliche Transportübersicht für transportbereite, unterwegs befindliche und im Krankenhaus angekommene Patienten
-- Lokale Speicherung im Browser
+- Login mit freigegebenen Einsatzkonten
+- Gemeinsame Patientendaten für alle angemeldeten Mitglieder
+- Automatische Live-Aktualisierung
+- Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
+- Triage mit zeitlichem Änderungsverlauf
+- Versorgung, Transportstatus und Krankenhausdokumentation
+- Farbliche Übersicht für transportbereite, unterwegs befindliche und angekommene Patienten
+- Suche und Triagefilter
+- Geschützter Datenzugriff durch Row Level Security
 
-## Lokal starten
+## 1. Datenbank einrichten
 
-Die `index.html` kann direkt im Browser geöffnet werden. Alternativ mit einem lokalen Webserver:
+1. Das Supabase-Projekt öffnen.
+2. Links **SQL Editor** auswählen.
+3. **New query** öffnen.
+4. Den vollständigen Inhalt aus `supabase.sql` einfügen.
+5. **Run** ausführen.
 
-```bash
-python -m http.server 8080
+Damit werden die Patiententabelle, die Mitgliederliste, Live-Updates und sämtliche Zugriffsregeln angelegt.
+
+## 2. Erstes Benutzerkonto anlegen
+
+1. In Supabase **Authentication → Users** öffnen.
+2. **Add user** auswählen und E-Mail sowie Passwort festlegen.
+3. Danach im SQL Editor ausführen und die Werte ersetzen:
+
+```sql
+insert into public.mci_members (user_id, display_name)
+select id, 'Projektleitung' from auth.users where email = 'deine@email.de'
+on conflict (user_id) do update set display_name = excluded.display_name;
 ```
 
-Danach `http://localhost:8080` öffnen.
+Ein Auth-Benutzer erhält erst durch einen Eintrag in `mci_members` Zugriff auf Patientendaten.
 
-## Auf GitHub Pages veröffentlichen
+## 3. Website mit Supabase verbinden
 
-1. Dateien in ein GitHub-Repository hochladen.
-2. Unter **Settings → Pages** bei **Build and deployment** die Option **Deploy from a branch** wählen.
-3. Branch `main` und Ordner `/ (root)` auswählen und speichern.
+Im Supabase-Dashboard über **Connect** oder **Project Settings → API** die Projekt-URL und den **Publishable Key** kopieren. Danach `config.js` bearbeiten:
 
-## Wichtiger Hinweis
+```js
+window.MCI_CONFIG = {
+  supabaseUrl: "https://DEIN-PROJEKT.supabase.co",
+  supabasePublishableKey: "DEIN-PUBLISHABLE-KEY"
+};
+```
 
-Die Daten liegen ausschließlich im `localStorage` des jeweiligen Browsers. Mehrere Geräte teilen ihre Daten nicht automatisch. Für reale personenbezogene Gesundheitsdaten sind Datenschutz, Zugriffsschutz, Verschlüsselung, Backups und die Vorgaben der verantwortlichen Organisation zu beachten. GitHub Pages stellt dafür kein geschütztes Backend bereit.
+Der Publishable Key darf Bestandteil einer Browser-App sein. Niemals den `service_role`-Key in `config.js`, GitHub oder anderen öffentlichen Dateien speichern.
+
+## 4. Auf GitHub Pages veröffentlichen
+
+```powershell
+git add .
+git commit -m "Add secure Supabase login and shared database"
+git push
+```
+
+Anschließend im GitHub-Repository unter **Settings → Pages** einstellen:
+
+- Source: **Deploy from a branch**
+- Branch: **main**
+- Ordner: **/(root)**
+
+Nach der Veröffentlichung zeigt die URL zunächst die Anmeldung. Nur gültige und in `mci_members` freigegebene Konten können das Board und seine Daten öffnen.
+
+## Weitere Benutzer freigeben
+
+Für jede Person zuerst unter **Authentication → Users** ein Konto erstellen. Danach die oben gezeigte SQL-Abfrage mit deren E-Mail und Anzeigenamen ausführen.
+
+Zum Entziehen des Zugriffs:
+
+```sql
+delete from public.mci_members
+where user_id = (select id from auth.users where email = 'person@email.de');
+```
+
+## Vorhandene lokale Daten
+
+Wenn die gemeinsame Datenbank beim ersten Login noch leer ist und der Browser ältere lokale Datensätze enthält, bietet die App einmalig deren Übernahme an. Die lokale Kopie bleibt als Sicherheitskopie im Browser bestehen.

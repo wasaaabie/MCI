@@ -1,5 +1,6 @@
 const STORAGE_KEY = "mci-board-patients-v1";
 const LEGACY_STORAGE_KEY = ["man", "v-board-patients-v1"].join("");
+const MIGRATION_KEY = "mci-board-supabase-migration-v1";
 const triageLabels = {
   red: "SK I · Rot",
   yellow: "SK II · Gelb",
@@ -15,13 +16,139 @@ const fields = [
 ];
 const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged"];
 
-let patients = loadPatients();
+let patients = [];
+let db = null;
+let currentUser = null;
+let activeUserId = "";
+let realtimeChannel = null;
+let reloadTimer = null;
+let migrationChecked = false;
+let toastTimer;
+
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#patientDialog");
 const form = $("#patientForm");
-let toastTimer;
 
-function loadPatients() {
+function getConfig() {
+  const config = window.MCI_CONFIG || {};
+  const url = String(config.supabaseUrl || "").trim();
+  const key = String(config.supabasePublishableKey || "").trim();
+  const valid = url.startsWith("https://") && url.includes(".supabase.co") && !url.includes("DEIN-") && key.length > 20 && !key.includes("DEIN-");
+  return { url, key, valid };
+}
+
+async function initialize() {
+  const config = getConfig();
+  if (!config.valid || !window.supabase?.createClient) {
+    $("#configWarning").classList.remove("hidden");
+    $("#loginBtn").disabled = true;
+    return;
+  }
+
+  db = window.supabase.createClient(config.url, config.key, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+
+  const { data, error } = await db.auth.getSession();
+  if (error) setAuthError("Die Anmeldung konnte nicht geprüft werden.");
+  await applySession(data?.session || null);
+
+  db.auth.onAuthStateChange((_event, session) => {
+    window.setTimeout(() => applySession(session), 0);
+  });
+}
+
+async function applySession(session) {
+  const user = session?.user || null;
+  if (!user) {
+    activeUserId = "";
+    currentUser = null;
+    stopRealtime();
+    patients = [];
+    showLogin();
+    return;
+  }
+  if (activeUserId === user.id) return;
+
+  const { data: membership, error } = await db
+    .from("mci_members")
+    .select("display_name")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error || !membership) {
+    await db.auth.signOut();
+    showLogin();
+    setAuthError("Dieses Konto ist nicht für das MCI Board freigegeben.");
+    return;
+  }
+
+  activeUserId = user.id;
+  currentUser = user;
+  $("#userEmail").textContent = membership.display_name || user.email || "Einsatzkonto";
+  $("#authGate").classList.add("hidden");
+  $("#appHeader").classList.remove("hidden");
+  $("#appMain").classList.remove("hidden");
+  setAuthError("");
+  await loadRemotePatients();
+  startRealtime();
+}
+
+function showLogin() {
+  $("#authGate").classList.remove("hidden");
+  $("#appHeader").classList.add("hidden");
+  $("#appMain").classList.add("hidden");
+  if (dialog.open) dialog.close();
+}
+
+function setAuthError(message) {
+  $("#loginError").textContent = message;
+  $("#loginError").classList.toggle("hidden", !message);
+}
+
+async function loadRemotePatients() {
+  if (!db || !currentUser) return;
+  $("#saveState").textContent = "Synchronisiere …";
+  const { data, error } = await db
+    .from("patients")
+    .select("id, data, created_at, updated_at")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    $("#saveState").textContent = "Synchronisierung fehlgeschlagen";
+    showToast("Patientendaten konnten nicht geladen werden.");
+    return;
+  }
+
+  patients = (data || []).map(row => ({
+    ...(row.data && typeof row.data === "object" ? row.data : {}),
+    id: row.id,
+    createdAt: row.data?.createdAt || row.created_at,
+    updatedAt: row.updated_at
+  }));
+  render();
+  $("#saveState").textContent = `Live · ${new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+  await offerLocalMigration();
+}
+
+function startRealtime() {
+  stopRealtime();
+  realtimeChannel = db
+    .channel("mci-patients-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "patients" }, () => {
+      clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(loadRemotePatients, 150);
+    })
+    .subscribe();
+}
+
+function stopRealtime() {
+  clearTimeout(reloadTimer);
+  if (realtimeChannel && db) db.removeChannel(realtimeChannel);
+  realtimeChannel = null;
+}
+
+function readLocalPatients() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY) || "[]";
     const value = JSON.parse(stored);
@@ -31,9 +158,42 @@ function loadPatients() {
   }
 }
 
-function savePatients() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
-  $("#saveState").textContent = `Lokal gespeichert · ${new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+async function offerLocalMigration() {
+  if (migrationChecked || patients.length || localStorage.getItem(MIGRATION_KEY)) return;
+  migrationChecked = true;
+  const localPatients = readLocalPatients();
+  if (!localPatients.length) return;
+  if (!confirm(`${localPatients.length} lokal gespeicherte Datensätze in die gemeinsame Datenbank übernehmen?`)) return;
+
+  const rows = localPatients.map(item => {
+    const patient = { ...item, id: isUuid(item.id) ? item.id : createUuid() };
+    return {
+      id: patient.id,
+      data: patient,
+      updated_by: currentUser.id,
+      updated_at: patient.updatedAt || new Date().toISOString()
+    };
+  });
+  const { error } = await db.from("patients").upsert(rows);
+  if (error) {
+    showToast("Lokale Datensätze konnten nicht übernommen werden.");
+    return;
+  }
+  localStorage.setItem(MIGRATION_KEY, new Date().toISOString());
+  showToast("Lokale Datensätze wurden übernommen.");
+  await loadRemotePatients();
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function createUuid() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, char => {
+    const random = Math.floor(Math.random() * 16);
+    return (char === "x" ? random : (random & 3) | 8).toString(16);
+  });
 }
 
 function escapeHtml(value = "") {
@@ -126,7 +286,7 @@ function nextPatientNumber() {
 
 function collectForm() {
   const existing = patients.find(item => item.id === $("#patientId").value);
-  const patient = { id: existing?.id || (globalThis.crypto?.randomUUID?.() || `p-${Date.now()}`), createdAt: existing?.createdAt || new Date().toISOString() };
+  const patient = { id: existing?.id || createUuid(), createdAt: existing?.createdAt || new Date().toISOString() };
   fields.forEach(field => { patient[field] = $(`#${field}`).value.trim(); });
   checkFields.forEach(field => { patient[field] = $(`#${field}`).checked; });
   patient.updatedAt = new Date().toISOString();
@@ -156,30 +316,76 @@ function renderTriageHistory(patient, pendingTriage = "") {
     </div>`).join("");
 }
 
-form.addEventListener("submit", event => {
+form.addEventListener("submit", async event => {
   event.preventDefault();
-  if (!form.reportValidity()) return;
+  if (!form.reportValidity() || !currentUser) return;
+  const button = $("#savePatientBtn");
+  button.disabled = true;
+  button.textContent = "Speichert …";
   const patient = collectForm();
+  const { error } = await db.from("patients").upsert({
+    id: patient.id,
+    data: patient,
+    updated_by: currentUser.id,
+    updated_at: patient.updatedAt
+  });
+  button.disabled = false;
+  button.textContent = "Datensatz speichern";
+  if (error) {
+    showToast("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+    return;
+  }
   const index = patients.findIndex(item => item.id === patient.id);
   if (index >= 0) patients[index] = patient; else patients.push(patient);
-  savePatients(); render(); dialog.close(); showToast("Patientendatensatz gespeichert.");
+  render();
+  dialog.close();
+  $("#saveState").textContent = "Synchronisiert";
+  showToast("Patientendatensatz gespeichert.");
 });
 
-$("#deleteBtn").addEventListener("click", () => {
+$("#deleteBtn").addEventListener("click", async () => {
   const id = $("#patientId").value;
   const patient = patients.find(item => item.id === id);
   if (!patient || !confirm(`Datensatz „${patient.name}“ wirklich löschen?`)) return;
+  $("#deleteBtn").disabled = true;
+  const { error } = await db.from("patients").delete().eq("id", id);
+  $("#deleteBtn").disabled = false;
+  if (error) {
+    showToast("Löschen fehlgeschlagen. Bitte erneut versuchen.");
+    return;
+  }
   patients = patients.filter(item => item.id !== id);
-  savePatients(); render(); dialog.close(); showToast("Patientendatensatz gelöscht.");
+  render();
+  dialog.close();
+  showToast("Patientendatensatz gelöscht.");
 });
 
 function showToast(message) {
   clearTimeout(toastTimer);
   $("#toast").textContent = message;
   $("#toast").classList.add("visible");
-  toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 2600);
+  toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3000);
 }
 
+$("#loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!db) return;
+  const button = $("#loginBtn");
+  button.disabled = true;
+  button.textContent = "Anmeldung läuft …";
+  setAuthError("");
+  const { error } = await db.auth.signInWithPassword({
+    email: $("#loginEmail").value.trim(),
+    password: $("#loginPassword").value
+  });
+  button.disabled = false;
+  button.textContent = "Anmelden";
+  if (error) setAuthError("E-Mail-Adresse oder Passwort ist nicht korrekt.");
+});
+
+$("#logoutBtn").addEventListener("click", async () => {
+  if (db) await db.auth.signOut();
+});
 $("#newPatientBtn").addEventListener("click", () => openDialog());
 $("#emptyNewBtn").addEventListener("click", () => openDialog());
 $("#closeDialogBtn").addEventListener("click", () => dialog.close());
@@ -192,4 +398,4 @@ $("#triage").addEventListener("change", event => {
 });
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 
-render();
+initialize();
