@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="Digitale Patientendokumentation für einen Massenanfall von Verletzten">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
   <header class="app-header">
@@ -27,6 +27,11 @@
       <div class="summary-card category-yellow"><span>SK II · Gelb</span><strong id="countYellow">0</strong></div>
       <div class="summary-card category-green"><span>SK III · Grün</span><strong id="countGreen">0</strong></div>
       <div class="summary-card category-black"><span>Verstorben</span><strong id="countBlack">0</strong></div>
+    </section>
+
+    <section class="transport-summary" aria-label="Transportstatus">
+      <div class="transport-counter transport-underway"><span>Unterwegs zum Krankenhaus</span><strong id="countUnderway">0</strong></div>
+      <div class="transport-counter transport-arrived"><span>Im Krankenhaus angekommen</span><strong id="countArrived">0</strong></div>
     </section>
 
     <section class="toolbar" aria-label="Werkzeuge">
@@ -94,8 +99,8 @@
           </div>
           <div class="check-grid">
             <label class="check"><input id="treatedOnSite" type="checkbox"><span>Vor Ort behandelt</span></label>
-            <label class="check"><input id="idCheckCode7" type="checkbox"><span>Ausweiskontrolle · Code 7</span></label>
-            <label class="check"><input id="transported" type="checkbox"><span>Abtransportiert</span></label>
+            <label class="check"><input id="idCheckCode7" type="checkbox"><span>Ausweiskontrolle</span></label>
+            <label class="check transport-check"><input id="transported" type="checkbox"><span>Abtransportiert</span></label>
           </div>
         </section>
 
@@ -107,7 +112,7 @@
             <label class="field field-wide"><span>Klinische Notizen</span><textarea id="hospitalNotes" rows="3" placeholder="Diagnose, Verlauf, Besonderheiten …"></textarea></label>
           </div>
           <div class="check-grid hospital-checks">
-            <label class="check"><input id="admitted" type="checkbox"><span>Eingeliefert</span></label>
+            <label class="check arrival-check"><input id="admitted" type="checkbox"><span>Eingeliefert</span></label>
             <label class="check"><input id="surgery" type="checkbox"><span>OP</span></label>
             <label class="check"><input id="treatedHospital" type="checkbox"><span>Behandelt</span></label>
             <label class="check"><input id="idCheckHospital" type="checkbox"><span>Ausweiskontrolle</span></label>
@@ -128,6 +133,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

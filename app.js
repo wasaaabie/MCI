@@ -59,6 +59,8 @@ function render() {
     if (counter) counter.textContent = patients.filter(patient => patient.triage === category).length;
   });
   $("#countAll").textContent = patients.length;
+  $("#countUnderway").textContent = patients.filter(patient => patient.transported && !patient.admitted).length;
+  $("#countArrived").textContent = patients.filter(patient => patient.admitted).length;
   $("#emptyState").classList.toggle("hidden", patients.length > 0);
   $("#patientGrid").classList.toggle("hidden", patients.length === 0);
 
@@ -68,11 +70,14 @@ function render() {
 
 function patientCard(patient) {
   const triage = patient.triage || "unassigned";
+  const transportState = patient.admitted ? "arrived" : patient.transported ? "underway" : "open";
   const statuses = [
-    patient.treatedOnSite && "Vor Ort behandelt", patient.transported && "Abtransportiert",
-    patient.admitted && "Eingeliefert", patient.surgery && "OP", patient.discharged && "Entlassen"
+    patient.treatedOnSite && { label: "Vor Ort behandelt", style: "" },
+    transportState === "underway" && { label: "Unterwegs", style: "underway" },
+    transportState === "arrived" && { label: "Im Krankenhaus", style: "arrived" },
+    patient.surgery && { label: "OP", style: "" }, patient.discharged && { label: "Entlassen", style: "" }
   ].filter(Boolean);
-  return `<article class="patient-card" data-triage="${escapeHtml(triage)}">
+  return `<article class="patient-card" data-triage="${escapeHtml(triage)}" data-transport="${transportState}">
     <div class="card-top"><div><h2>${escapeHtml(patient.name || "Unbekannt")}</h2><span class="patient-no">${escapeHtml(patient.patientNumber || "Ohne Patientennummer")}</span></div><span class="triage-badge ${escapeHtml(triage)}">${escapeHtml(triageLabels[triage] || triageLabels.unassigned)}</span></div>
     <div class="card-details">
       <div class="detail"><span>Behandlungsplatz</span><strong title="${escapeHtml(patient.treatmentArea)}">${escapeHtml(patient.treatmentArea || "–")}</strong></div>
@@ -80,7 +85,7 @@ function patientCard(patient) {
       <div class="detail"><span>Ziel</span><strong title="${escapeHtml(patient.destinationHospital)}">${escapeHtml(patient.destinationHospital || "–")}</strong></div>
       <div class="detail"><span>Sichtung</span><strong>${formatDate(patient.triageTime)}</strong></div>
     </div>
-    <div class="status-row">${statuses.length ? statuses.map(status => `<span class="status-chip">${status}</span>`).join("") : `<span class="status-chip">Status offen</span>`}</div>
+    <div class="status-row">${statuses.length ? statuses.map(status => `<span class="status-chip ${status.style}">${status.label}</span>`).join("") : `<span class="status-chip">Status offen</span>`}</div>
     <div class="card-footer"><span class="updated-at">Aktualisiert ${formatDate(patient.updatedAt)}</span><button class="edit-button" type="button" data-edit-id="${escapeHtml(patient.id)}">Öffnen</button></div>
   </article>`;
 }
