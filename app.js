@@ -19,6 +19,7 @@ const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "tran
 let patients = [];
 let incidents = [];
 let activities = [];
+let bulletinEntries = [];
 let currentIncident = null;
 let db = null;
 let currentUser = null;
@@ -98,11 +99,15 @@ async function applySession(session) {
 }
 
 function showLogin() {
+  bulletinEntries = [];
   $("#authGate").classList.remove("hidden");
   $("#appHeader").classList.add("hidden");
+  $("#bulletinMain").classList.add("hidden");
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   if (dialog.open) dialog.close();
+  if ($("#incidentDialog").open) $("#incidentDialog").close();
+  if ($("#bulletinDialog").open) $("#bulletinDialog").close();
 }
 
 function setAuthError(message) {
@@ -173,6 +178,9 @@ function startRealtime() {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_log" }, payload => {
       if (currentIncident && payload.new?.incident_id === currentIncident.id) loadActivity();
     })
+    .on("postgres_changes", { event: "*", schema: "public", table: "bulletin_entries" }, () => {
+      if (!$("#bulletinMain").classList.contains("hidden")) loadBulletinEntries();
+    })
     .subscribe();
 }
 
@@ -221,11 +229,14 @@ function showIncidentOverview() {
   patients = [];
   activities = [];
   $("#pageTitle").textContent = "MCI Übersicht";
+  $("#bulletinMain").classList.add("hidden");
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
   $("#backToIncidentsBtn").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
+  $("#newBulletinBtn").classList.add("hidden");
+  $("#bulletinBoardBtn").classList.remove("hidden");
   $("#newIncidentBtn").classList.remove("hidden");
   $("#saveState").textContent = "Live synchronisiert";
   renderIncidents();
@@ -237,6 +248,7 @@ async function openIncident(id) {
   currentIncident = incident;
   const closed = incident.status === "closed";
   $("#incidentMain").classList.add("hidden");
+  $("#bulletinMain").classList.add("hidden");
   $("#appMain").classList.remove("hidden");
   $("#pageTitle").textContent = incident.title;
   $("#incidentTitle").textContent = incident.title;
@@ -245,6 +257,8 @@ async function openIncident(id) {
   $("#readOnlyBadge").classList.toggle("hidden", !closed);
   $("#backToIncidentsBtn").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
+  $("#newBulletinBtn").classList.add("hidden");
+  $("#bulletinBoardBtn").classList.add("hidden");
   $("#newPatientBtn").classList.toggle("hidden", closed);
   $("#closeIncidentBtn").classList.toggle("hidden", closed);
   await loadRemotePatients();
@@ -256,6 +270,70 @@ function openIncidentDialog() {
   $("#newIncidentStartedAt").value = localDateTimeValue(new Date());
   $("#incidentDialog").showModal();
   setTimeout(() => $("#newIncidentTitle").focus(), 50);
+}
+
+async function showBulletinBoard() {
+  currentIncident = null;
+  patients = [];
+  activities = [];
+  $("#pageTitle").textContent = "Schwarzes Brett";
+  $("#incidentMain").classList.add("hidden");
+  $("#appMain").classList.add("hidden");
+  $("#bulletinMain").classList.remove("hidden");
+  $("#backToIncidentsBtn").classList.remove("hidden");
+  $("#bulletinBoardBtn").classList.add("hidden");
+  $("#newIncidentBtn").classList.add("hidden");
+  $("#newPatientBtn").classList.add("hidden");
+  $("#closeIncidentBtn").classList.add("hidden");
+  $("#newBulletinBtn").classList.remove("hidden");
+  await loadBulletinEntries();
+}
+
+function openBulletinDialog() {
+  $("#bulletinForm").reset();
+  $("#bulletinDialog").showModal();
+  setTimeout(() => $("#bulletinPatientName").focus(), 50);
+}
+
+async function loadBulletinEntries() {
+  if (!db || !currentUser) return;
+  const { data, error } = await db
+    .from("bulletin_entries")
+    .select("id, patient_name, phone, concern, status, created_by_name, created_at, completed_by_name, completed_at")
+    .order("created_at", { ascending: false });
+  bulletinEntries = error ? [] : (data || []);
+  if (error) showToast("Einträge des Schwarzen Bretts konnten nicht geladen werden.");
+  renderBulletinEntries();
+}
+
+function renderBulletinEntries() {
+  const openEntries = bulletinEntries.filter(entry => entry.status === "open");
+  const closedEntries = bulletinEntries.filter(entry => entry.status === "done").sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
+  $("#openBulletinCount").textContent = openEntries.length;
+  $("#closedBulletinCount").textContent = closedEntries.length;
+  $("#openBulletinBody").innerHTML = openEntries.length ? openEntries.map(openBulletinRow).join("") : `<tr><td class="table-empty" colspan="6">Keine offenen Einträge vorhanden.</td></tr>`;
+  $("#closedBulletinBody").innerHTML = closedEntries.length ? closedEntries.map(closedBulletinRow).join("") : `<tr><td class="table-empty" colspan="6">Noch keine erledigten Einträge vorhanden.</td></tr>`;
+  document.querySelectorAll("[data-complete-bulletin]").forEach(button => button.addEventListener("click", () => completeBulletinEntry(button.dataset.completeBulletin)));
+}
+
+function openBulletinRow(entry) {
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td><strong>${escapeHtml(entry.created_by_name || "Unbekannt")}</strong></td><td class="bulletin-date">${formatDate(entry.created_at)}</td><td><button class="complete-button" type="button" data-complete-bulletin="${entry.id}">Als erledigt markieren</button></td></tr>`;
+}
+
+function closedBulletinRow(entry) {
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td></tr>`;
+}
+
+async function completeBulletinEntry(id) {
+  const entry = bulletinEntries.find(item => item.id === id);
+  if (!entry || !confirm(`Eintrag für „${entry.patient_name}“ als erledigt markieren?`)) return;
+  const { error } = await db.from("bulletin_entries").update({ status: "done" }).eq("id", id).eq("status", "open");
+  if (error) {
+    showToast("Eintrag konnte nicht abgeschlossen werden.");
+    return;
+  }
+  await loadBulletinEntries();
+  showToast("Eintrag wurde in die Historie verschoben.");
 }
 
 async function loadActivity() {
@@ -537,6 +615,30 @@ function showToast(message) {
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3000);
 }
 
+$("#bulletinForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!$("#bulletinForm").reportValidity() || !currentUser) return;
+  const button = $("#saveBulletinBtn");
+  button.disabled = true;
+  button.textContent = "Speichert …";
+  const { error } = await db.from("bulletin_entries").insert({
+    id: createUuid(),
+    patient_name: $("#bulletinPatientName").value.trim(),
+    phone: $("#bulletinPhone").value.trim(),
+    concern: $("#bulletinConcern").value.trim(),
+    status: "open"
+  });
+  button.disabled = false;
+  button.textContent = "Eintrag speichern";
+  if (error) {
+    showToast("Eintrag konnte nicht gespeichert werden.");
+    return;
+  }
+  $("#bulletinDialog").close();
+  await loadBulletinEntries();
+  showToast("Eintrag wurde angelegt.");
+});
+
 $("#incidentForm").addEventListener("submit", async event => {
   event.preventDefault();
   if (!$("#incidentForm").reportValidity() || !currentUser) return;
@@ -602,7 +704,12 @@ $("#logoutBtn").addEventListener("click", async () => {
 });
 $("#newIncidentBtn").addEventListener("click", openIncidentDialog);
 $("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
+$("#bulletinBoardBtn").addEventListener("click", showBulletinBoard);
+$("#newBulletinBtn").addEventListener("click", openBulletinDialog);
+$("#newBulletinMainBtn").addEventListener("click", openBulletinDialog);
 $("#backToIncidentsBtn").addEventListener("click", showIncidentOverview);
+$("#closeBulletinDialogBtn").addEventListener("click", () => $("#bulletinDialog").close());
+$("#cancelBulletinBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#cancelIncidentBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#newPatientBtn").addEventListener("click", () => openDialog());
@@ -617,5 +724,6 @@ $("#triage").addEventListener("change", event => {
 });
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 $("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
+$("#bulletinDialog").addEventListener("click", event => { if (event.target === $("#bulletinDialog")) $("#bulletinDialog").close(); });
 
 initialize();

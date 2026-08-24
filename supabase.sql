@@ -43,6 +43,20 @@ create table if not exists public.activity_log (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.bulletin_entries (
+  id uuid primary key,
+  patient_name text not null,
+  phone text not null,
+  concern text not null,
+  status text not null default 'open' check (status in ('open', 'done')),
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  completed_by uuid references auth.users(id),
+  completed_by_name text,
+  completed_at timestamptz
+);
+
 alter table public.incidents add column if not exists scene_lead text;
 update public.incidents set scene_lead = 'Unbekannt' where scene_lead is null or btrim(scene_lead) = '';
 alter table public.incidents alter column scene_lead set not null;
@@ -85,6 +99,7 @@ alter table public.patients alter column incident_id set not null;
 create index if not exists patients_incident_id_idx on public.patients (incident_id);
 create index if not exists incidents_status_started_idx on public.incidents (status, started_at desc);
 create index if not exists activity_log_incident_created_idx on public.activity_log (incident_id, created_at desc);
+create index if not exists bulletin_entries_status_created_idx on public.bulletin_entries (status, created_at desc);
 
 create or replace function public.log_patient_activity()
 returns trigger
@@ -149,6 +164,35 @@ begin
 end;
 $$;
 
+create or replace function public.protect_bulletin_entry()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  actor_name := coalesce(actor_name, 'Unbekannt');
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();
+    new.created_by_name := actor_name;
+    new.created_at := now();
+    new.status := 'open';
+    new.completed_by := null; new.completed_by_name := null; new.completed_at := null;
+    return new;
+  end if;
+  if old.status <> 'open' or new.status <> 'done' then
+    raise exception 'Nur offene Einträge können als erledigt markiert werden.';
+  end if;
+  new.patient_name := old.patient_name; new.phone := old.phone; new.concern := old.concern;
+  new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  new.completed_by := auth.uid(); new.completed_by_name := actor_name; new.completed_at := now();
+  return new;
+end;
+$$;
+
 drop trigger if exists patients_activity_trigger on public.patients;
 create trigger patients_activity_trigger after insert or update or delete on public.patients
 for each row execute function public.log_patient_activity();
@@ -157,22 +201,30 @@ drop trigger if exists incidents_activity_trigger on public.incidents;
 create trigger incidents_activity_trigger after insert or update on public.incidents
 for each row execute function public.log_incident_activity();
 
+drop trigger if exists bulletin_entries_protection_trigger on public.bulletin_entries;
+create trigger bulletin_entries_protection_trigger before insert or update on public.bulletin_entries
+for each row execute function public.protect_bulletin_entry();
+
 revoke execute on function public.log_patient_activity() from public, anon, authenticated;
 revoke execute on function public.log_incident_activity() from public, anon, authenticated;
+revoke execute on function public.protect_bulletin_entry() from public, anon, authenticated;
 
 alter table public.mci_members enable row level security;
 alter table public.incidents enable row level security;
 alter table public.patients enable row level security;
 alter table public.activity_log enable row level security;
+alter table public.bulletin_entries enable row level security;
 
 revoke all on public.mci_members from anon, authenticated;
 revoke all on public.incidents from anon, authenticated;
 revoke all on public.patients from anon, authenticated;
 revoke all on public.activity_log from anon, authenticated;
+revoke all on public.bulletin_entries from anon, authenticated;
 grant select on public.mci_members to authenticated;
 grant select, insert, update on public.incidents to authenticated;
 grant select, insert, update, delete on public.patients to authenticated;
 grant select on public.activity_log to authenticated;
+grant select, insert, update on public.bulletin_entries to authenticated;
 
 drop policy if exists "Mitglied sieht eigene Freigabe" on public.mci_members;
 create policy "Mitglied sieht eigene Freigabe"
@@ -183,6 +235,31 @@ drop policy if exists "Mitglieder lesen Protokoll" on public.activity_log;
 create policy "Mitglieder lesen Protokoll"
 on public.activity_log for select to authenticated
 using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
+
+drop policy if exists "Mitglieder lesen Schwarzes Brett" on public.bulletin_entries;
+create policy "Mitglieder lesen Schwarzes Brett"
+on public.bulletin_entries for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
+
+drop policy if exists "Mitglieder erstellen Brett-Einträge" on public.bulletin_entries;
+create policy "Mitglieder erstellen Brett-Einträge"
+on public.bulletin_entries for insert to authenticated
+with check (
+  created_by = auth.uid() and status = 'open'
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+);
+
+drop policy if exists "Mitglieder erledigen Brett-Einträge" on public.bulletin_entries;
+create policy "Mitglieder erledigen Brett-Einträge"
+on public.bulletin_entries for update to authenticated
+using (
+  status = 'open'
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+)
+with check (
+  status = 'done' and completed_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+);
 
 drop policy if exists "Mitglieder lesen MCIs" on public.incidents;
 create policy "Mitglieder lesen MCIs"
@@ -263,6 +340,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'activity_log'
   ) then
     alter publication supabase_realtime add table public.activity_log;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'bulletin_entries'
+  ) then
+    alter publication supabase_realtime add table public.bulletin_entries;
   end if;
 end $$;
 

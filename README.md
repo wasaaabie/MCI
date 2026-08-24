@@ -8,6 +8,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Eigene Einsatzblätter für jede MCI
 - Abschluss laufender MCIs und schreibgeschützte Historie
 - Manipulationsgeschütztes Änderungsprotokoll mit Display Name, Zeitpunkt und geänderten Feldern
+- Gemeinsames Schwarzes Brett mit offenen Einträgen und erledigter Historie
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
 - Automatische Live-Aktualisierung
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
@@ -79,6 +80,10 @@ Nach der Veröffentlichung zeigt die URL zunächst die Anmeldung. Nur gültige u
 Nach dem Login erscheint die MCI-Übersicht. Zuerst wird eine MCI mit Name, Scene Lead und Startzeit angelegt. Ort beziehungsweise Postal Code und Beschreibung sind optional. Patienten gehören ausschließlich zu diesem Einsatzblatt. Über **MCI abschließen** wird der Einsatz in die Historie verschoben. Abgeschlossene MCIs und ihre Patientendaten sind danach schreibgeschützt.
 
 Das Änderungsprotokoll speichert ab Installation dieser Version automatisch, wer eine MCI oder einen Patienten angelegt, geändert, gelöscht oder abgeschlossen hat. Als Name wird der zum Änderungszeitpunkt in `mci_members` hinterlegte `display_name` gespeichert.
+
+## Schwarzes Brett
+
+Das Schwarze Brett ist über die MCI-Übersicht erreichbar. Ein Eintrag enthält Patientenname, Telefonnummer und Anliegen beziehungsweise Vorfall. Ersteller sowie Erstellzeitpunkt werden serverseitig aus der Anmeldung übernommen. Beim Markieren als erledigt speichert Supabase auch die abschließende Person und den Zeitpunkt und verschiebt den Eintrag in die schreibgeschützte Historie.
 
 ## Weitere Benutzer freigeben
 
