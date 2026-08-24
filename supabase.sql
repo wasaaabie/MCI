@@ -78,6 +78,30 @@ create table if not exists public.lab_requests (
   completed_at timestamptz
 );
 
+create table if not exists public.deceased_records (
+  id uuid primary key,
+  patient_name text not null,
+  date_of_death date not null,
+  suspected_circumstances text not null,
+  contact_information text,
+  burial_date date,
+  autopsy_approved boolean not null default false,
+  autopsy_report boolean not null default false,
+  chamber_occupied boolean not null default false,
+  chamber_number smallint,
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz,
+  constraint deceased_records_chamber_number_check check (chamber_number between 1 and 16),
+  constraint deceased_records_chamber_state_check check (
+    (chamber_occupied and chamber_number is not null)
+    or (not chamber_occupied and chamber_number is null)
+  )
+);
+
 alter table public.bulletin_entries add column if not exists updated_by uuid references auth.users(id);
 alter table public.bulletin_entries add column if not exists updated_by_name text;
 alter table public.bulletin_entries add column if not exists updated_at timestamptz;
@@ -126,6 +150,9 @@ create index if not exists incidents_status_started_idx on public.incidents (sta
 create index if not exists activity_log_incident_created_idx on public.activity_log (incident_id, created_at desc);
 create index if not exists bulletin_entries_status_created_idx on public.bulletin_entries (status, created_at desc);
 create index if not exists lab_requests_status_created_idx on public.lab_requests (status, created_at desc);
+create index if not exists deceased_records_death_date_idx on public.deceased_records (date_of_death desc);
+create unique index if not exists deceased_records_occupied_chamber_idx
+on public.deceased_records (chamber_number) where chamber_occupied;
 
 create or replace function public.log_patient_activity()
 returns trigger
@@ -260,6 +287,36 @@ begin
 end;
 $$;
 
+create or replace function public.protect_deceased_record()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  actor_name := coalesce(actor_name, 'Unbekannt');
+  if new.chamber_occupied then
+    if new.chamber_number is null or new.chamber_number < 1 or new.chamber_number > 16 then
+      raise exception 'Für ein belegtes Fach muss eine Fachnummer zwischen 1 und 16 gewählt werden.';
+    end if;
+  else
+    new.chamber_number := null;
+  end if;
+  if new.autopsy_report then new.autopsy_approved := true; end if;
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid(); new.created_by_name := actor_name; new.created_at := now();
+    new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
+    return new;
+  end if;
+  new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  new.updated_by := auth.uid(); new.updated_by_name := actor_name; new.updated_at := now();
+  return new;
+end;
+$$;
+
 drop trigger if exists patients_activity_trigger on public.patients;
 create trigger patients_activity_trigger after insert or update or delete on public.patients
 for each row execute function public.log_patient_activity();
@@ -276,10 +333,15 @@ drop trigger if exists lab_requests_protection_trigger on public.lab_requests;
 create trigger lab_requests_protection_trigger before insert or update on public.lab_requests
 for each row execute function public.protect_lab_request();
 
+drop trigger if exists deceased_records_protection_trigger on public.deceased_records;
+create trigger deceased_records_protection_trigger before insert or update on public.deceased_records
+for each row execute function public.protect_deceased_record();
+
 revoke execute on function public.log_patient_activity() from public, anon, authenticated;
 revoke execute on function public.log_incident_activity() from public, anon, authenticated;
 revoke execute on function public.protect_bulletin_entry() from public, anon, authenticated;
 revoke execute on function public.protect_lab_request() from public, anon, authenticated;
+revoke execute on function public.protect_deceased_record() from public, anon, authenticated;
 
 alter table public.mci_members enable row level security;
 alter table public.incidents enable row level security;
@@ -287,6 +349,7 @@ alter table public.patients enable row level security;
 alter table public.activity_log enable row level security;
 alter table public.bulletin_entries enable row level security;
 alter table public.lab_requests enable row level security;
+alter table public.deceased_records enable row level security;
 
 revoke all on public.mci_members from anon, authenticated;
 revoke all on public.incidents from anon, authenticated;
@@ -294,12 +357,14 @@ revoke all on public.patients from anon, authenticated;
 revoke all on public.activity_log from anon, authenticated;
 revoke all on public.bulletin_entries from anon, authenticated;
 revoke all on public.lab_requests from anon, authenticated;
+revoke all on public.deceased_records from anon, authenticated;
 grant select on public.mci_members to authenticated;
 grant select, insert, update on public.incidents to authenticated;
 grant select, insert, update, delete on public.patients to authenticated;
 grant select on public.activity_log to authenticated;
 grant select, insert, update on public.bulletin_entries to authenticated;
 grant select, insert, update on public.lab_requests to authenticated;
+grant select, insert, update on public.deceased_records to authenticated;
 
 drop policy if exists "Mitglied sieht eigene Freigabe" on public.mci_members;
 create policy "Mitglied sieht eigene Freigabe"
@@ -365,6 +430,28 @@ with check (
     (status = 'open' and updated_by = auth.uid() and completed_by is null)
     or (status = 'done' and completed_by = auth.uid())
   )
+);
+
+drop policy if exists "Mitglieder lesen Totenübersicht" on public.deceased_records;
+create policy "Mitglieder lesen Totenübersicht"
+on public.deceased_records for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
+
+drop policy if exists "Mitglieder erstellen Einträge der Totenübersicht" on public.deceased_records;
+create policy "Mitglieder erstellen Einträge der Totenübersicht"
+on public.deceased_records for insert to authenticated
+with check (
+  created_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+);
+
+drop policy if exists "Mitglieder bearbeiten Einträge der Totenübersicht" on public.deceased_records;
+create policy "Mitglieder bearbeiten Einträge der Totenübersicht"
+on public.deceased_records for update to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()))
+with check (
+  updated_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
 );
 
 drop policy if exists "Mitglieder lesen MCIs" on public.incidents;
@@ -458,6 +545,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lab_requests'
   ) then
     alter publication supabase_realtime add table public.lab_requests;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'deceased_records'
+  ) then
+    alter publication supabase_realtime add table public.deceased_records;
   end if;
 end $$;
 

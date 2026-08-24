@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=21">
+  <link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -42,6 +42,7 @@
       <button id="newIncidentBtn" class="button button-primary" type="button">+ MCI anlegen</button>
       <button id="newBulletinBtn" class="button button-primary hidden" type="button">+ Eintrag anlegen</button>
       <button id="newLabBtn" class="button button-primary hidden" type="button">+ Labor Request</button>
+      <button id="newDeceasedBtn" class="button button-primary hidden" type="button">+ Person erfassen</button>
       <button id="newPatientBtn" class="button button-primary hidden" type="button">+ Patient anlegen</button>
     </div>
   </header>
@@ -51,8 +52,55 @@
     <button id="navIncidentsBtn" class="nav-item active" type="button" title="MCI-Verwaltung"><span class="nav-icon">M</span><span class="nav-copy"><strong>MCI-Verwaltung</strong><small>Einsätze &amp; Historie</small></span></button>
     <button id="navBulletinBtn" class="nav-item" type="button" title="Schwarzes Brett"><span class="nav-icon">B</span><span class="nav-copy"><strong>Schwarzes Brett</strong><small>Anliegen &amp; Vorfälle</small></span></button>
     <button id="navLabBtn" class="nav-item" type="button" title="Labor Requests"><span class="nav-icon">L</span><span class="nav-copy"><strong>Labor Requests</strong><small>Proben &amp; Hinweise</small></span></button>
+    <button id="navDeceasedBtn" class="nav-item" type="button" title="Totenübersicht"><span class="nav-icon deceased-nav-icon">†</span><span class="nav-copy"><strong>Totenübersicht</strong><small>Kühlfächer &amp; Dokumentation</small></span></button>
     <div class="nav-future"><span>Weiteres Modul</span><small>Navigation ist vorbereitet</small></div>
   </nav>
+
+  <main id="deceasedMain" class="hidden">
+    <section class="incident-intro">
+      <div><p class="eyebrow">Dokumentation</p><h2>Totenübersicht</h2><p>Verstorbene, Obduktionsstatus und die Belegung der 16 Kühlfächer zentral verwalten.</p></div>
+      <button id="newDeceasedMainBtn" class="button button-primary" type="button">+ Person erfassen</button>
+    </section>
+    <section class="deceased-summary" aria-label="Übersicht Verstorbene und Kühlfächer">
+      <div class="deceased-counter"><span>Erfasste Personen</span><strong id="deceasedTotalCount">0</strong></div>
+      <div class="deceased-counter occupied"><span>Fächer belegt</span><strong id="deceasedOccupiedCount">0</strong></div>
+      <div class="deceased-counter free"><span>Fächer frei</span><strong id="deceasedFreeCount">16</strong></div>
+      <div class="deceased-counter pending"><span>Berichte ausstehend</span><strong id="deceasedPendingReportsCount">0</strong></div>
+    </section>
+    <section class="chamber-section">
+      <div class="history-heading"><div><p class="eyebrow">Kühlkammer</p><h2>Fachbelegung</h2></div><span class="chamber-legend"><i></i> frei <i></i> belegt</span></div>
+      <div id="chamberGrid" class="chamber-grid" aria-live="polite"></div>
+    </section>
+    <section class="board-section deceased-list-section">
+      <div class="history-heading"><div><p class="eyebrow">Register</p><h2>Erfasste Verstorbene</h2></div></div>
+      <div class="table-wrap"><table class="bulletin-table deceased-table"><thead><tr><th>Patient</th><th>Todesdatum</th><th>Vermutlicher Todesumstand</th><th>Ansprechpartner / Informationen</th><th>Beisetzung</th><th>Dokumentation</th><th>Kühlfach</th><th></th></tr></thead><tbody id="deceasedBody"></tbody></table></div>
+    </section>
+  </main>
+
+  <dialog id="deceasedDialog">
+    <form id="deceasedForm" method="dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Totenübersicht</p><h2 id="deceasedDialogTitle">Person erfassen</h2></div>
+        <button id="closeDeceasedDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button>
+      </div>
+      <div class="form-body">
+        <input id="deceasedEntryId" type="hidden">
+        <div class="form-grid">
+          <label class="field"><span>Patientenname *</span><input id="deceasedPatientName" required autocomplete="off" placeholder="Name der verstorbenen Person"></label>
+          <label class="field"><span>Todesdatum *</span><input id="deceasedDateOfDeath" type="date" required></label>
+          <label class="field field-wide"><span>Vermutlicher Todesumstand *</span><textarea id="deceasedCircumstances" required rows="3" placeholder="Vermutete Todesursache oder bekannte Umstände …"></textarea></label>
+          <label class="field field-wide"><span>Ansprechpartner / Informationen</span><textarea id="deceasedContactInfo" rows="3" placeholder="Angehörige, Behörden, Erreichbarkeit oder weitere Informationen …"></textarea></label>
+          <label class="field"><span>Beisetzungsdatum (optional)</span><input id="deceasedBurialDate" type="date"></label>
+          <div class="field chamber-field"><span>Kühlfach</span><div class="chamber-field-controls"><label class="check"><input id="deceasedChamberOccupied" type="checkbox"> Fach belegt</label><select id="deceasedChamberNumber" disabled aria-label="Kühlfach auswählen"><option value="">Fach auswählen</option></select></div></div>
+        </div>
+        <div class="deceased-checks">
+          <label class="check"><input id="deceasedAutopsyApproved" type="checkbox"> Obduktion freigegeben</label>
+          <label class="check"><input id="deceasedAutopsyReport" type="checkbox"> Obduktionsbericht liegt vor</label>
+        </div>
+      </div>
+      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelDeceasedBtn" class="button" type="button">Abbrechen</button><button id="saveDeceasedBtn" class="button button-primary" type="submit">Person speichern</button></div>
+    </form>
+  </dialog>
 
   <main id="labMain" class="hidden">
     <section class="incident-intro">
@@ -284,6 +332,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>

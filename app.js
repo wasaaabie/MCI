@@ -22,6 +22,7 @@ let incidents = [];
 let activities = [];
 let bulletinEntries = [];
 let labEntries = [];
+let deceasedRecords = [];
 let currentIncident = null;
 let db = null;
 let currentUser = null;
@@ -116,17 +117,20 @@ async function applySession(session) {
 function showLogin() {
   bulletinEntries = [];
   labEntries = [];
+  deceasedRecords = [];
   $("#authGate").classList.remove("hidden");
   $("#appHeader").classList.add("hidden");
   $("#appNav").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
+  $("#deceasedMain").classList.add("hidden");
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   if (dialog.open) dialog.close();
   if ($("#incidentDialog").open) $("#incidentDialog").close();
   if ($("#bulletinDialog").open) $("#bulletinDialog").close();
   if ($("#labDialog").open) $("#labDialog").close();
+  if ($("#deceasedDialog").open) $("#deceasedDialog").close();
 }
 
 function setAuthError(message) {
@@ -203,6 +207,9 @@ function startRealtime() {
     .on("postgres_changes", { event: "*", schema: "public", table: "lab_requests" }, () => {
       if (!$("#labMain").classList.contains("hidden")) loadLabEntries();
     })
+    .on("postgres_changes", { event: "*", schema: "public", table: "deceased_records" }, () => {
+      if (!$("#deceasedMain").classList.contains("hidden")) loadDeceasedRecords();
+    })
     .subscribe();
 }
 
@@ -253,12 +260,14 @@ function showIncidentOverview() {
   $("#pageTitle").textContent = "MCI Übersicht";
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
+  $("#deceasedMain").classList.add("hidden");
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.add("hidden");
   $("#newLabBtn").classList.add("hidden");
+  $("#newDeceasedBtn").classList.add("hidden");
   $("#newIncidentBtn").classList.remove("hidden");
   setActiveNav("incidents");
   $("#saveState").textContent = "Live synchronisiert";
@@ -273,6 +282,7 @@ async function openIncident(id) {
   $("#incidentMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
+  $("#deceasedMain").classList.add("hidden");
   $("#appMain").classList.remove("hidden");
   $("#pageTitle").textContent = incident.title;
   $("#incidentTitle").textContent = incident.title;
@@ -282,6 +292,7 @@ async function openIncident(id) {
   $("#newIncidentBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.add("hidden");
   $("#newLabBtn").classList.add("hidden");
+  $("#newDeceasedBtn").classList.add("hidden");
   $("#newPatientBtn").classList.toggle("hidden", closed);
   $("#closeIncidentBtn").classList.toggle("hidden", closed);
   setActiveNav("incidents");
@@ -304,12 +315,14 @@ async function showBulletinBoard() {
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
+  $("#deceasedMain").classList.add("hidden");
   $("#bulletinMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.remove("hidden");
   $("#newLabBtn").classList.add("hidden");
+  $("#newDeceasedBtn").classList.add("hidden");
   setActiveNav("bulletin");
   await loadBulletinEntries();
 }
@@ -318,9 +331,11 @@ function setActiveNav(section) {
   $("#navIncidentsBtn").classList.toggle("active", section === "incidents");
   $("#navBulletinBtn").classList.toggle("active", section === "bulletin");
   $("#navLabBtn").classList.toggle("active", section === "lab");
+  $("#navDeceasedBtn").classList.toggle("active", section === "deceased");
   $("#navIncidentsBtn").setAttribute("aria-current", section === "incidents" ? "page" : "false");
   $("#navBulletinBtn").setAttribute("aria-current", section === "bulletin" ? "page" : "false");
   $("#navLabBtn").setAttribute("aria-current", section === "lab" ? "page" : "false");
+  $("#navDeceasedBtn").setAttribute("aria-current", section === "deceased" ? "page" : "false");
 }
 
 function openBulletinDialog(id = "") {
@@ -389,12 +404,14 @@ async function showLabRequests() {
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
+  $("#deceasedMain").classList.add("hidden");
   $("#labMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
   $("#newBulletinBtn").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
   $("#newLabBtn").classList.remove("hidden");
+  $("#newDeceasedBtn").classList.add("hidden");
   setActiveNav("lab");
   await loadLabEntries();
 }
@@ -456,6 +473,122 @@ async function completeLabEntry(id) {
   }
   await loadLabEntries();
   showToast("Labor Request wurde in die Historie verschoben.");
+}
+
+async function showDeceasedOverview() {
+  currentIncident = null;
+  patients = [];
+  activities = [];
+  $("#pageTitle").textContent = "Totenübersicht";
+  $("#incidentMain").classList.add("hidden");
+  $("#appMain").classList.add("hidden");
+  $("#bulletinMain").classList.add("hidden");
+  $("#labMain").classList.add("hidden");
+  $("#deceasedMain").classList.remove("hidden");
+  $("#newIncidentBtn").classList.add("hidden");
+  $("#newPatientBtn").classList.add("hidden");
+  $("#newBulletinBtn").classList.add("hidden");
+  $("#newLabBtn").classList.add("hidden");
+  $("#closeIncidentBtn").classList.add("hidden");
+  $("#newDeceasedBtn").classList.remove("hidden");
+  setActiveNav("deceased");
+  await loadDeceasedRecords();
+}
+
+function populateChamberOptions(currentId = "") {
+  const occupied = new Map(deceasedRecords
+    .filter(record => record.chamber_occupied && record.id !== currentId)
+    .map(record => [Number(record.chamber_number), record.patient_name]));
+  $("#deceasedChamberNumber").innerHTML = `<option value="">Fach auswählen</option>${Array.from({ length: 16 }, (_, index) => {
+    const number = index + 1;
+    const patient = occupied.get(number);
+    return `<option value="${number}"${patient ? " disabled" : ""}>Fach ${String(number).padStart(2, "0")}${patient ? ` · belegt (${escapeHtml(patient)})` : " · frei"}</option>`;
+  }).join("")}`;
+}
+
+function setDeceasedChamberState() {
+  const occupied = $("#deceasedChamberOccupied").checked;
+  const select = $("#deceasedChamberNumber");
+  select.disabled = !occupied;
+  select.required = occupied;
+  if (!occupied) select.value = "";
+}
+
+function openDeceasedDialog(id = "", preferredChamber = null) {
+  $("#deceasedForm").reset();
+  $("#deceasedEntryId").value = id;
+  const record = deceasedRecords.find(item => item.id === id);
+  populateChamberOptions(id);
+  $("#deceasedDialogTitle").textContent = record ? "Eintrag bearbeiten" : "Person erfassen";
+  $("#saveDeceasedBtn").textContent = record ? "Änderungen speichern" : "Person speichern";
+  if (record) {
+    $("#deceasedPatientName").value = record.patient_name;
+    $("#deceasedDateOfDeath").value = record.date_of_death;
+    $("#deceasedCircumstances").value = record.suspected_circumstances;
+    $("#deceasedContactInfo").value = record.contact_information || "";
+    $("#deceasedBurialDate").value = record.burial_date || "";
+    $("#deceasedAutopsyApproved").checked = Boolean(record.autopsy_approved);
+    $("#deceasedAutopsyReport").checked = Boolean(record.autopsy_report);
+    $("#deceasedChamberOccupied").checked = Boolean(record.chamber_occupied);
+    $("#deceasedChamberNumber").value = record.chamber_number ? String(record.chamber_number) : "";
+  } else {
+    $("#deceasedDateOfDeath").value = localDateValue(new Date());
+    if (preferredChamber) {
+      $("#deceasedChamberOccupied").checked = true;
+      $("#deceasedChamberNumber").value = String(preferredChamber);
+    }
+  }
+  setDeceasedChamberState();
+  $("#deceasedDialog").showModal();
+  setTimeout(() => $("#deceasedPatientName").focus(), 50);
+}
+
+async function loadDeceasedRecords() {
+  if (!db || !currentUser) return;
+  const { data, error } = await db
+    .from("deceased_records")
+    .select("id, patient_name, date_of_death, suspected_circumstances, contact_information, burial_date, autopsy_approved, autopsy_report, chamber_occupied, chamber_number, created_by_name, created_at, updated_by_name, updated_at")
+    .order("date_of_death", { ascending: false });
+  deceasedRecords = error ? [] : (data || []);
+  if (error) showToast("Totenübersicht konnte nicht geladen werden.");
+  renderDeceasedRecords();
+}
+
+function renderDeceasedRecords() {
+  const occupiedRecords = deceasedRecords.filter(record => record.chamber_occupied && record.chamber_number);
+  const occupiedByChamber = new Map(occupiedRecords.map(record => [Number(record.chamber_number), record]));
+  $("#deceasedTotalCount").textContent = deceasedRecords.length;
+  $("#deceasedOccupiedCount").textContent = occupiedRecords.length;
+  $("#deceasedFreeCount").textContent = Math.max(0, 16 - occupiedRecords.length);
+  $("#deceasedPendingReportsCount").textContent = deceasedRecords.filter(record => record.autopsy_approved && !record.autopsy_report).length;
+  $("#chamberGrid").innerHTML = Array.from({ length: 16 }, (_, index) => {
+    const number = index + 1;
+    const record = occupiedByChamber.get(number);
+    return record
+      ? `<button class="chamber-card occupied" type="button" data-edit-deceased="${record.id}" title="Eintrag von ${escapeHtml(record.patient_name)} öffnen"><span>Fach ${String(number).padStart(2, "0")}</span><strong>${escapeHtml(record.patient_name)}</strong><small>seit ${formatCalendarDate(record.date_of_death)}</small></button>`
+      : `<button class="chamber-card" type="button" data-new-deceased-chamber="${number}" title="Person direkt in Fach ${number} erfassen"><span>Fach ${String(number).padStart(2, "0")}</span><strong>Frei</strong><small>anklicken zum Belegen</small></button>`;
+  }).join("");
+  $("#deceasedBody").innerHTML = deceasedRecords.length
+    ? deceasedRecords.map(deceasedTableRow).join("")
+    : `<tr><td class="table-empty" colspan="8">Noch keine verstorbenen Personen erfasst.</td></tr>`;
+  document.querySelectorAll("[data-edit-deceased]").forEach(button => button.addEventListener("click", () => openDeceasedDialog(button.dataset.editDeceased)));
+  document.querySelectorAll("[data-new-deceased-chamber]").forEach(button => button.addEventListener("click", () => openDeceasedDialog("", Number(button.dataset.newDeceasedChamber))));
+}
+
+function deceasedTableRow(record) {
+  const audit = record.updated_at
+    ? `Bearbeitet von ${escapeHtml(record.updated_by_name || "Unbekannt")} · ${formatDate(record.updated_at)}`
+    : `Erfasst von ${escapeHtml(record.created_by_name || "Unbekannt")} · ${formatDate(record.created_at)}`;
+  const approval = record.autopsy_approved
+    ? `<span class="record-chip done">Obduktion freigegeben</span>`
+    : `<span class="record-chip waiting">Freigabe ausstehend</span>`;
+  const report = record.autopsy_report
+    ? `<span class="record-chip done">Bericht vorhanden</span>`
+    : `<span class="record-chip">Kein Bericht</span>`;
+  const chamber = record.chamber_occupied && record.chamber_number
+    ? `<span class="chamber-badge">Fach ${String(record.chamber_number).padStart(2, "0")}</span>`
+    : `<span class="chamber-badge free">Kein Fach</span>`;
+  return `<tr><td><strong>${escapeHtml(record.patient_name)}</strong><small>${audit}</small></td><td class="bulletin-date">${formatCalendarDate(record.date_of_death)}</td><td>${escapeHtml(record.suspected_circumstances)}</td><td>${escapeHtml(record.contact_information || "–")}</td><td class="bulletin-date">${formatCalendarDate(record.burial_date)}</td><td><div class="deceased-status">${approval}${report}</div></td><td>${chamber}</td><td><button class="bulletin-edit-button" type="button" data-edit-deceased="${record.id}">Bearbeiten</button></td></tr>`;
 }
 
 async function loadActivity() {
@@ -568,6 +701,12 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? "–" : date.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
 }
 
+function formatCalendarDate(value) {
+  if (!value) return "–";
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? "–" : date.toLocaleDateString("de-DE", { dateStyle: "medium" });
+}
+
 function render() {
   const query = $("#searchInput").value.trim().toLocaleLowerCase("de");
   const filter = $("#triageFilter").value;
@@ -643,6 +782,11 @@ function openDialog(id = "") {
 function localDateTimeValue(date) {
   const offset = date.getTimezoneOffset();
   return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+}
+
+function localDateValue(date) {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10);
 }
 
 function nextPatientNumber() {
@@ -736,6 +880,48 @@ function showToast(message) {
   $("#toast").classList.add("visible");
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3000);
 }
+
+$("#deceasedForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  setDeceasedChamberState();
+  if (!$("#deceasedForm").reportValidity() || !currentUser) return;
+  const id = $("#deceasedEntryId").value;
+  const chamberOccupied = $("#deceasedChamberOccupied").checked;
+  const chamberNumber = chamberOccupied ? Number($("#deceasedChamberNumber").value) : null;
+  const chamberConflict = chamberOccupied && deceasedRecords.some(record => record.id !== id && record.chamber_occupied && Number(record.chamber_number) === chamberNumber);
+  if (chamberConflict) {
+    showToast(`Kühlfach ${String(chamberNumber).padStart(2, "0")} ist bereits belegt.`);
+    return;
+  }
+  const button = $("#saveDeceasedBtn");
+  button.disabled = true;
+  button.textContent = "Speichert …";
+  const autopsyReport = $("#deceasedAutopsyReport").checked;
+  const values = {
+    patient_name: $("#deceasedPatientName").value.trim(),
+    date_of_death: $("#deceasedDateOfDeath").value,
+    suspected_circumstances: $("#deceasedCircumstances").value.trim(),
+    contact_information: $("#deceasedContactInfo").value.trim() || null,
+    burial_date: $("#deceasedBurialDate").value || null,
+    autopsy_approved: $("#deceasedAutopsyApproved").checked || autopsyReport,
+    autopsy_report: autopsyReport,
+    chamber_occupied: chamberOccupied,
+    chamber_number: chamberNumber
+  };
+  const result = id
+    ? await db.from("deceased_records").update(values).eq("id", id)
+    : await db.from("deceased_records").insert({ id: createUuid(), ...values });
+  const { error } = result;
+  button.disabled = false;
+  button.textContent = id ? "Änderungen speichern" : "Person speichern";
+  if (error) {
+    showToast(error.code === "23505" ? "Das gewählte Kühlfach wurde zwischenzeitlich belegt." : "Eintrag konnte nicht gespeichert werden.");
+    return;
+  }
+  $("#deceasedDialog").close();
+  await loadDeceasedRecords();
+  showToast(id ? "Eintrag wurde aktualisiert." : "Person wurde in der Totenübersicht erfasst.");
+});
 
 $("#labForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -860,15 +1046,20 @@ $("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
 $("#navIncidentsBtn").addEventListener("click", showIncidentOverview);
 $("#navBulletinBtn").addEventListener("click", showBulletinBoard);
 $("#navLabBtn").addEventListener("click", showLabRequests);
+$("#navDeceasedBtn").addEventListener("click", showDeceasedOverview);
 $("#navCollapseBtn").addEventListener("click", () => setNavCollapsed(!$("#appNav").classList.contains("collapsed")));
 $("#newBulletinBtn").addEventListener("click", () => openBulletinDialog());
 $("#newBulletinMainBtn").addEventListener("click", () => openBulletinDialog());
 $("#newLabBtn").addEventListener("click", () => openLabDialog());
 $("#newLabMainBtn").addEventListener("click", () => openLabDialog());
+$("#newDeceasedBtn").addEventListener("click", () => openDeceasedDialog());
+$("#newDeceasedMainBtn").addEventListener("click", () => openDeceasedDialog());
 $("#closeBulletinDialogBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#cancelBulletinBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#closeLabDialogBtn").addEventListener("click", () => $("#labDialog").close());
 $("#cancelLabBtn").addEventListener("click", () => $("#labDialog").close());
+$("#closeDeceasedDialogBtn").addEventListener("click", () => $("#deceasedDialog").close());
+$("#cancelDeceasedBtn").addEventListener("click", () => $("#deceasedDialog").close());
 $("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#cancelIncidentBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#newPatientBtn").addEventListener("click", () => openDialog());
@@ -881,9 +1072,14 @@ $("#triage").addEventListener("change", event => {
   const patient = patients.find(item => item.id === $("#patientId").value);
   renderTriageHistory(patient, event.target.value);
 });
+$("#deceasedChamberOccupied").addEventListener("change", setDeceasedChamberState);
+$("#deceasedAutopsyReport").addEventListener("change", event => {
+  if (event.target.checked) $("#deceasedAutopsyApproved").checked = true;
+});
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 $("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
 $("#bulletinDialog").addEventListener("click", event => { if (event.target === $("#bulletinDialog")) $("#bulletinDialog").close(); });
 $("#labDialog").addEventListener("click", event => { if (event.target === $("#labDialog")) $("#labDialog").close(); });
+$("#deceasedDialog").addEventListener("click", event => { if (event.target === $("#deceasedDialog")) $("#deceasedDialog").close(); });
 
 initialize();

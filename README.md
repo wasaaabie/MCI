@@ -11,6 +11,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Gemeinsames Schwarzes Brett mit offenen Einträgen und erledigter Historie
 - Erweiterbare Modulnavigation für zusätzliche Seiten
 - Labor Requests mit optionaler Probennummer und erledigter Historie
+- Totenübersicht mit Obduktionsstatus und Live-Belegung von 16 Kühlfächern
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
 - Automatische Live-Aktualisierung
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
@@ -90,6 +91,10 @@ Das Schwarze Brett ist über die Modulnavigation erreichbar. Ein Eintrag enthäl
 ## Labor Requests
 
 Labor Requests enthalten Patientenname, Telefonnummer, eine optionale Probennummer und einen Hinweis. Ersteller und Zeitpunkte werden automatisch protokolliert. Offene Requests können bearbeitet und anschließend als erledigt in die schreibgeschützte Historie verschoben werden.
+
+## Totenübersicht
+
+Die Totenübersicht dokumentiert Patientenname, Todesdatum, vermuteten Todesumstand, Ansprechpartner beziehungsweise weitere Informationen und ein optionales Beisetzungsdatum. Obduktionsfreigabe und vorhandener Obduktionsbericht werden als Status angezeigt. Die Belegung aller 16 Kühlfächer ist direkt sichtbar; ein Fach kann technisch nicht doppelt vergeben werden. Ersteller, letzte Bearbeitung und Zeitpunkt werden automatisch über den angemeldeten Benutzer protokolliert.
 
 ## Weitere Benutzer freigeben
 
