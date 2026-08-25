@@ -1434,56 +1434,31 @@ function patientCard(patient) {
 
 function patientAsText(patient) {
   const value = input => String(input ?? "").trim() || "–";
-  const yesNo = input => input ? "Ja" : "Nein";
   const lines = [
-    "MCI-PATIENTENAKTE",
-    "==================",
-    `MCI: ${value(currentIncident?.title)}`,
-    `Einsatzort: ${value(currentIncident?.location)}`,
-    `Scene Lead: ${value(currentIncident?.scene_lead)}`,
-    `Einsatzbeginn: ${formatDate(currentIncident?.started_at)}`,
-    "",
-    "PERSONENDATEN",
+    "PATIENTENAKTE",
+    "=============",
     `Patientennummer: ${value(patient.patientNumber)}`,
     `Name: ${value(patient.name)}`,
     `Geschlecht: ${value(patient.gender)}`,
     `Alter / Geburtsdatum: ${value(patient.age)}`,
     `Personenbeschreibung: ${value(patient.description)}`,
     "",
-    "SICHTUNG UND BEHANDLUNG",
-    `Triage: ${value(triageLabels[patient.triage || "unassigned"])}`,
-    `Sichtungszeit: ${formatDate(patient.triageTime)}`,
+    "VERSORGUNG VOR ORT",
     `Verletzungen: ${value(patient.injuries)}`,
     `Medikation / Maßnahmen: ${value(patient.medication)}`,
-    `Vor Ort behandelt: ${yesNo(patient.treatedOnSite)}`,
-    `Ausweiskontrolle vor Ort: ${yesNo(patient.idCheckCode7)}`,
     `Behandelnde Einheit vor Ort: ${value(patient.unitOnSite)}`,
     "",
     "TRANSPORT UND KLINIK",
-    `Transportbereit: ${yesNo(patient.readyForTransport)}`,
-    `Abtransportiert: ${yesNo(patient.transported)}`,
     `Zielkrankenhaus: ${value(patient.destinationHospital)}`,
-    `Eingeliefert: ${yesNo(patient.admitted)}`,
     `Behandelnder Mediziner: ${value(patient.physician)}`,
     `Behandlungsplatz / Übergabe an: ${value(patient.treatmentArea)}`,
-    `OP: ${yesNo(patient.surgery)}`,
-    `Behandelt: ${yesNo(patient.treatedHospital)}`,
-    `Ausweiskontrolle im Krankenhaus: ${yesNo(patient.idCheckHospital)}`,
-    `Entlassen: ${yesNo(patient.discharged)}`,
     `Kliniknotizen: ${value(patient.hospitalNotes)}`,
     "",
     "WEITERE NOTIZEN",
     value(patient.notes),
     "",
-    "SICHTUNGSVERLAUF"
+    `Angelegt: ${formatDate(patient.createdAt)}`
   ];
-  const history = Array.isArray(patient.triageHistory) ? patient.triageHistory : [];
-  if (history.length) {
-    history.forEach(entry => lines.push(`${formatDate(entry.at)}: ${value(triageLabels[entry.from || "unassigned"])} → ${value(triageLabels[entry.to || "unassigned"])}`));
-  } else {
-    lines.push("Keine Änderungen dokumentiert.");
-  }
-  lines.push("", `Angelegt: ${formatDate(patient.createdAt)}`, `Zuletzt aktualisiert: ${formatDate(patient.updatedAt)}`);
   return lines.join("\n");
 }
 
