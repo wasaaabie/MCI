@@ -102,7 +102,7 @@ Das Änderungsprotokoll speichert ab Installation dieser Version automatisch, we
 
 ## Schwarzes Brett
 
-Das Schwarze Brett ist über die Modulnavigation erreichbar. Ein Eintrag enthält Patientenname, Telefonnummer und Anliegen beziehungsweise Vorfall. Ersteller sowie Erstellzeitpunkt werden serverseitig aus der Anmeldung übernommen. Offene Einträge können bearbeitet werden; dabei speichert Supabase den letzten Bearbeiter und Änderungszeitpunkt. Beim Markieren als erledigt speichert Supabase auch die abschließende Person und den Zeitpunkt und verschiebt den Eintrag in die schreibgeschützte Historie.
+Das Schwarze Brett ist über die Modulnavigation erreichbar. Ein Eintrag enthält Patientenname, Telefonnummer, Fachbereich, die zuständige Angabe **Bearbeitet durch** und das Anliegen beziehungsweise den Vorfall. Ersteller sowie Erstellzeitpunkt werden serverseitig aus der Anmeldung übernommen. Offene Einträge können bearbeitet werden; dabei speichert Supabase den letzten Bearbeiter und Änderungszeitpunkt. Beim Markieren als erledigt speichert Supabase auch die abschließende Person und den Zeitpunkt und verschiebt den Eintrag in die schreibgeschützte Historie.
 
 ## Labor Requests
 

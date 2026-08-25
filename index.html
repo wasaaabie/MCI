@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=27">
+  <link rel="stylesheet" href="styles.css?v=28">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -155,11 +155,11 @@
     </section>
     <section class="board-section">
       <div class="history-heading"><div><p class="eyebrow">Offen</p><h2>Aktuelle Einträge</h2></div><span id="openBulletinCount" class="history-count">0</span></div>
-      <div class="table-wrap"><table class="bulletin-table"><thead><tr><th>Patient</th><th>Telefonnummer</th><th>Anliegen / Vorfall</th><th>Erstellt von</th><th>Erstellt am</th><th></th></tr></thead><tbody id="openBulletinBody"></tbody></table></div>
+      <div class="table-wrap"><table class="bulletin-table"><thead><tr><th>Patient</th><th>Fachbereich</th><th>Telefonnummer</th><th>Anliegen / Vorfall</th><th>Bearbeitet durch</th><th>Erstellt von</th><th>Erstellt am</th><th></th></tr></thead><tbody id="openBulletinBody"></tbody></table></div>
     </section>
     <section class="history-section">
       <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Erledigte Einträge</h2></div><span id="closedBulletinCount" class="history-count">0</span></div>
-      <div class="table-wrap"><table class="bulletin-table history-table"><thead><tr><th>Patient</th><th>Telefonnummer</th><th>Anliegen / Vorfall</th><th>Erstellt von</th><th>Erledigt von</th><th>Erledigt am</th><th></th></tr></thead><tbody id="closedBulletinBody"></tbody></table></div>
+      <div class="table-wrap"><table class="bulletin-table history-table"><thead><tr><th>Patient</th><th>Fachbereich</th><th>Telefonnummer</th><th>Anliegen / Vorfall</th><th>Bearbeitet durch</th><th>Erstellt von</th><th>Erledigt von</th><th>Erledigt am</th><th></th></tr></thead><tbody id="closedBulletinBody"></tbody></table></div>
     </section>
   </main>
 
@@ -257,6 +257,8 @@
         <div class="form-grid">
           <label class="field"><span>Patientenname *</span><input id="bulletinPatientName" required autocomplete="off" placeholder="Name des Patienten"></label>
           <label class="field"><span>Telefonnummer *</span><input id="bulletinPhone" type="tel" required autocomplete="off" placeholder="Telefonnummer"></label>
+          <label class="field"><span>Fachbereich *</span><input id="bulletinDepartment" required autocomplete="off" maxlength="100" placeholder="z. B. Chirurgie oder Innere Medizin"></label>
+          <label class="field"><span>Bearbeitet durch *</span><input id="bulletinHandledBy" required autocomplete="off" maxlength="100" placeholder="Name oder zuständige Einheit"></label>
           <label class="field field-wide"><span>Anliegen / Vorfall *</span><textarea id="bulletinConcern" required rows="4" placeholder="Anliegen oder Vorfall beschreiben …"></textarea></label>
         </div>
       </div>
@@ -380,6 +382,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

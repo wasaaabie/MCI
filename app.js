@@ -480,6 +480,8 @@ function openBulletinDialog(id = "") {
   if (entry) {
     $("#bulletinPatientName").value = entry.patient_name;
     $("#bulletinPhone").value = entry.phone;
+    $("#bulletinDepartment").value = entry.department || "";
+    $("#bulletinHandledBy").value = entry.handled_by || "";
     $("#bulletinConcern").value = entry.concern;
   }
   $("#bulletinDialog").showModal();
@@ -490,7 +492,7 @@ async function loadBulletinEntries() {
   if (!db || !currentUser) return;
   const { data, error } = await db
     .from("bulletin_entries")
-    .select("id, patient_name, phone, concern, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at")
+    .select("id, patient_name, phone, department, handled_by, concern, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at")
     .order("created_at", { ascending: false });
   bulletinEntries = error ? [] : (data || []);
   if (error) showToast("Einträge des Schwarzen Bretts konnten nicht geladen werden.");
@@ -502,8 +504,8 @@ function renderBulletinEntries() {
   const closedEntries = bulletinEntries.filter(entry => entry.status === "done").sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
   $("#openBulletinCount").textContent = openEntries.length;
   $("#closedBulletinCount").textContent = closedEntries.length;
-  $("#openBulletinBody").innerHTML = openEntries.length ? openEntries.map(openBulletinRow).join("") : `<tr><td class="table-empty" colspan="6">Keine offenen Einträge vorhanden.</td></tr>`;
-  $("#closedBulletinBody").innerHTML = closedEntries.length ? closedEntries.map(closedBulletinRow).join("") : `<tr><td class="table-empty" colspan="7">Noch keine erledigten Einträge vorhanden.</td></tr>`;
+  $("#openBulletinBody").innerHTML = openEntries.length ? openEntries.map(openBulletinRow).join("") : `<tr><td class="table-empty" colspan="8">Keine offenen Einträge vorhanden.</td></tr>`;
+  $("#closedBulletinBody").innerHTML = closedEntries.length ? closedEntries.map(closedBulletinRow).join("") : `<tr><td class="table-empty" colspan="9">Noch keine erledigten Einträge vorhanden.</td></tr>`;
   document.querySelectorAll("[data-complete-bulletin]").forEach(button => button.addEventListener("click", () => completeBulletinEntry(button.dataset.completeBulletin)));
   document.querySelectorAll("[data-edit-bulletin]").forEach(button => button.addEventListener("click", () => openBulletinDialog(button.dataset.editBulletin)));
   document.querySelectorAll('[data-delete-history="bulletin"]').forEach(button => button.addEventListener("click", () => deleteHistoricalEntry("bulletin", button.dataset.historyId)));
@@ -511,11 +513,11 @@ function renderBulletinEntries() {
 
 function openBulletinRow(entry) {
   const edited = entry.updated_at ? `<br><small>Bearbeitet von ${escapeHtml(entry.updated_by_name || "Unbekannt")} · ${formatDate(entry.updated_at)}</small>` : "";
-  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td><strong>${escapeHtml(entry.created_by_name || "Unbekannt")}</strong>${edited}</td><td class="bulletin-date">${formatDate(entry.created_at)}</td><td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-edit-bulletin="${entry.id}">Bearbeiten</button><button class="complete-button" type="button" data-complete-bulletin="${entry.id}">Erledigt</button></div></td></tr>`;
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.department || "–")}</td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td><strong>${escapeHtml(entry.handled_by || "–")}</strong></td><td><strong>${escapeHtml(entry.created_by_name || "Unbekannt")}</strong>${edited}</td><td class="bulletin-date">${formatDate(entry.created_at)}</td><td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-edit-bulletin="${entry.id}">Bearbeiten</button><button class="complete-button" type="button" data-complete-bulletin="${entry.id}">Erledigt</button></div></td></tr>`;
 }
 
 function closedBulletinRow(entry) {
-  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td><td>${historyDeleteButton("bulletin", entry.id)}</td></tr>`;
+  return `<tr><td><strong>${escapeHtml(entry.patient_name)}</strong></td><td>${escapeHtml(entry.department || "–")}</td><td>${escapeHtml(entry.phone)}</td><td class="bulletin-concern">${escapeHtml(entry.concern)}</td><td><strong>${escapeHtml(entry.handled_by || "–")}</strong></td><td>${escapeHtml(entry.created_by_name || "Unbekannt")}<br><small>${formatDate(entry.created_at)}</small></td><td>${escapeHtml(entry.completed_by_name || "Unbekannt")}</td><td class="bulletin-date">${formatDate(entry.completed_at)}</td><td>${historyDeleteButton("bulletin", entry.id)}</td></tr>`;
 }
 
 async function completeBulletinEntry(id) {
@@ -1176,6 +1178,8 @@ $("#bulletinForm").addEventListener("submit", async event => {
   const values = {
     patient_name: $("#bulletinPatientName").value.trim(),
     phone: $("#bulletinPhone").value.trim(),
+    department: $("#bulletinDepartment").value.trim(),
+    handled_by: $("#bulletinHandledBy").value.trim(),
     concern: $("#bulletinConcern").value.trim()
   };
   const result = id

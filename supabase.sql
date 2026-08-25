@@ -61,6 +61,8 @@ create table if not exists public.bulletin_entries (
   id uuid primary key,
   patient_name text not null,
   phone text not null,
+  department text,
+  handled_by text,
   concern text not null,
   status text not null default 'open' check (status in ('open', 'done')),
   created_by uuid not null references auth.users(id),
@@ -119,6 +121,8 @@ create table if not exists public.deceased_records (
 alter table public.bulletin_entries add column if not exists updated_by uuid references auth.users(id);
 alter table public.bulletin_entries add column if not exists updated_by_name text;
 alter table public.bulletin_entries add column if not exists updated_at timestamptz;
+alter table public.bulletin_entries add column if not exists department text;
+alter table public.bulletin_entries add column if not exists handled_by text;
 
 alter table public.incidents add column if not exists scene_lead text;
 update public.incidents set scene_lead = 'Unbekannt' where scene_lead is null or btrim(scene_lead) = '';
@@ -261,7 +265,7 @@ begin
     return new;
   end if;
   if new.status <> 'done' then raise exception 'Ungültiger Statuswechsel.'; end if;
-  new.patient_name := old.patient_name; new.phone := old.phone; new.concern := old.concern;
+  new.patient_name := old.patient_name; new.phone := old.phone; new.department := old.department; new.handled_by := old.handled_by; new.concern := old.concern;
   new.updated_by := old.updated_by; new.updated_by_name := old.updated_by_name; new.updated_at := old.updated_at;
   new.completed_by := auth.uid(); new.completed_by_name := actor_name; new.completed_at := now();
   return new;
