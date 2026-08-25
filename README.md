@@ -23,6 +23,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Geschützter Datenzugriff durch Row Level Security
 - Berechtigungsgeschützte Benutzerverwaltung für Konten und Sonderrechte
 - Eigenes Passwort ändern und Passwörter durch die Benutzerverwaltung neu setzen
+- Geschützte Psychologie-Akten mit behandelndem Personal und chronologischem Sitzungsverlauf
 
 ## 1. Datenbank einrichten
 
@@ -112,9 +113,15 @@ Labor Requests enthalten Patientenname, Telefonnummer, eine optionale Probennumm
 
 Die Totenübersicht dokumentiert Patientenname, Todesdatum, vermuteten Todesumstand, Ansprechpartner beziehungsweise weitere Informationen und ein optionales Beisetzungsdatum. Obduktionsfreigabe und vorhandener Obduktionsbericht werden als Status angezeigt. Die Belegung aller 16 Kühlfächer ist direkt sichtbar; ein Fach kann technisch nicht doppelt vergeben und über den Bearbeitungsdialog wieder geleert werden. Beim Bestätigen eines Obduktionsberichts warnt die App vor dem endgültigen Abschluss, leert das zugehörige Kühlfach automatisch und verschiebt den schreibgeschützten Eintrag in die Historie. Ersteller, letzte Bearbeitung und Zeitpunkt werden automatisch über den angemeldeten Benutzer protokolliert.
 
+## Psychologie
+
+Das Modul **Psychologie** ist nur für Benutzer mit der Berechtigung `can_access_psychology` sichtbar und zusätzlich durch Row Level Security geschützt. Eine Patientenakte enthält Aktennummer, Stammdaten, behandelndes Personal, Status und allgemeine Anmerkungen. Sitzungen werden chronologisch mit Anlass, Gesprächsverlauf, Einschätzung, Maßnahmen, Folgetermin und optionalem internem Vermerk dokumentiert. Abgeschlossene Akten und deren Sitzungen sind schreibgeschützt.
+
+Die vorhandene Berechtigung **Historie endgültig löschen** gilt auch für abgeschlossene Psychologie-Akten. Beim Löschen werden die Akte und sämtliche enthaltenen Sitzungen unwiderruflich entfernt. Aktive oder pausierte Akten können nicht endgültig gelöscht werden.
+
 ## Weitere Benutzer freigeben
 
-Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, Passwort, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. Jeder angemeldete Benutzer kann außerdem über **Passwort ändern** im Kopfbereich sein eigenes Passwort setzen. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
+Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, Passwort, Psychologie-Zugriff, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. Jeder angemeldete Benutzer kann außerdem über **Passwort ändern** im Kopfbereich sein eigenes Passwort setzen. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
 
 ### Recht zum Löschen von Historien
 

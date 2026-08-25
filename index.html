@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=28">
+  <link rel="stylesheet" href="styles.css?v=29">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -53,9 +53,92 @@
     <button id="navBulletinBtn" class="nav-item" type="button" title="Schwarzes Brett"><span class="nav-icon">B</span><span class="nav-copy"><strong>Schwarzes Brett</strong><small>Anliegen &amp; Vorfälle</small></span></button>
     <button id="navLabBtn" class="nav-item" type="button" title="Labor Requests"><span class="nav-icon">L</span><span class="nav-copy"><strong>Labor Requests</strong><small>Proben &amp; Hinweise</small></span></button>
     <button id="navDeceasedBtn" class="nav-item" type="button" title="Totenübersicht"><span class="nav-icon deceased-nav-icon">†</span><span class="nav-copy"><strong>Totenübersicht</strong><small>Kühlfächer &amp; Dokumentation</small></span></button>
+    <button id="navPsychologyBtn" class="nav-item hidden" type="button" title="Psychologie"><span class="nav-icon">Ψ</span><span class="nav-copy"><strong>Psychologie</strong><small>Akten &amp; Sitzungen</small></span></button>
     <button id="navUsersBtn" class="nav-item hidden" type="button" title="Benutzerverwaltung"><span class="nav-icon">U</span><span class="nav-copy"><strong>Benutzerverwaltung</strong><small>Konten &amp; Berechtigungen</small></span></button>
     <div class="nav-future"><span>Weiteres Modul</span><small>Navigation ist vorbereitet</small></div>
   </nav>
+
+  <main id="psychologyMain" class="hidden">
+    <section class="incident-intro">
+      <div><p class="eyebrow">Vertraulicher Bereich</p><h2>Psychologische Patientenakten</h2><p>Behandlungen, Zuständigkeiten und Sitzungsverläufe geschützt dokumentieren.</p></div>
+      <button id="newPsychologyRecordBtn" class="button button-primary" type="button">+ Neue Akte</button>
+    </section>
+    <section class="deceased-summary psychology-summary" aria-label="Übersicht Psychologie-Akten">
+      <div class="deceased-counter"><span>Alle Akten</span><strong id="psychologyTotalCount">0</strong></div>
+      <div class="deceased-counter occupied"><span>Aktiv</span><strong id="psychologyActiveCount">0</strong></div>
+      <div class="deceased-counter pending"><span>Pausiert</span><strong id="psychologyPausedCount">0</strong></div>
+      <div class="deceased-counter free"><span>Abgeschlossen</span><strong id="psychologyClosedCount">0</strong></div>
+    </section>
+    <section class="toolbar psychology-toolbar" aria-label="Psychologie-Akten filtern">
+      <label class="search-field"><span class="sr-only">Akten suchen</span><input id="psychologySearch" type="search" placeholder="Patient, Aktennummer oder Personal suchen …"></label>
+      <label><span class="sr-only">Status filtern</span><select id="psychologyStatusFilter"><option value="">Alle Status</option><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="closed">Abgeschlossen</option></select></label>
+    </section>
+    <section class="board-section">
+      <div class="history-heading"><div><p class="eyebrow">Aktenregister</p><h2>Patientenakten</h2></div><span id="psychologyVisibleCount" class="history-count">0</span></div>
+      <div class="table-wrap"><table class="bulletin-table psychology-table"><thead><tr><th>Akte</th><th>Patient</th><th>Behandelndes Personal</th><th>Status</th><th>Letzte Sitzung</th><th></th></tr></thead><tbody id="psychologyRecordsBody"></tbody></table></div>
+    </section>
+  </main>
+
+  <main id="psychologyDetailMain" class="hidden">
+    <section class="psychology-detail-header">
+      <button id="backToPsychologyBtn" class="button" type="button">← Zurück zur Übersicht</button>
+      <div class="psychology-detail-actions"><button id="editPsychologyRecordBtn" class="button" type="button">Akte bearbeiten</button><button id="newPsychologySessionBtn" class="button button-primary" type="button">+ Sitzung dokumentieren</button><button id="deletePsychologyRecordBtn" class="button button-danger hidden" type="button">Akte endgültig löschen</button></div>
+    </section>
+    <section class="incident-context psychology-record-context">
+      <div><p class="eyebrow" id="psychologyRecordStatusLabel">Psychologie-Akte</p><h2 id="psychologyRecordTitle"></h2><p id="psychologyRecordMeta"></p></div>
+      <span id="psychologyReadOnlyBadge" class="readonly-badge hidden">Abgeschlossen · schreibgeschützt</span>
+    </section>
+    <section class="psychology-record-info">
+      <div><span>Behandelndes Personal</span><strong id="psychologyRecordStaff"></strong></div>
+      <div><span>Telefonnummer</span><strong id="psychologyRecordPhone"></strong></div>
+      <div><span>Geburtsdatum</span><strong id="psychologyRecordBirthDate"></strong></div>
+      <div class="psychology-notes"><span>Allgemeine Anmerkungen</span><p id="psychologyRecordNotes"></p></div>
+    </section>
+    <section class="activity-section psychology-session-section">
+      <div class="activity-heading"><div><p class="eyebrow">Aktenverlauf</p><h2>Sitzungen</h2></div><span id="psychologySessionCount" class="history-count">0</span></div>
+      <div id="psychologySessionList" class="psychology-session-list" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <dialog id="psychologyRecordDialog">
+    <form id="psychologyRecordForm" method="dialog">
+      <div class="dialog-header"><div><p class="eyebrow">Psychologie</p><h2 id="psychologyRecordDialogTitle">Patientenakte anlegen</h2></div><button id="closePsychologyRecordDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button></div>
+      <div class="form-body">
+        <input id="psychologyRecordId" type="hidden">
+        <div class="form-grid">
+          <label class="field"><span>Aktennummer *</span><input id="psychologyFileNumber" required maxlength="50" autocomplete="off" placeholder="z. B. PSY-001"></label>
+          <label class="field"><span>Patientenname *</span><input id="psychologyPatientName" required maxlength="120" autocomplete="off"></label>
+          <label class="field"><span>Geburtsdatum</span><input id="psychologyBirthDate" type="date"></label>
+          <label class="field"><span>Telefonnummer</span><input id="psychologyPhone" type="tel" maxlength="50" autocomplete="off"></label>
+          <label class="field field-wide"><span>Behandelndes Personal *</span><input id="psychologyTreatingStaff" required maxlength="200" autocomplete="off" placeholder="Name oder mehrere Personen / Einheiten"></label>
+          <label class="field"><span>Aktenstatus *</span><select id="psychologyRecordStatus"><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="closed">Abgeschlossen</option></select></label>
+          <label class="field field-wide"><span>Allgemeine Anmerkungen</span><textarea id="psychologyGeneralNotes" rows="4" placeholder="Übergreifende Informationen zur Behandlung …"></textarea></label>
+        </div>
+        <div id="psychologyCloseWarning" class="archive-warning hidden" role="alert"><strong>Akte wird abgeschlossen</strong><span>Nach dem Speichern sind die Akte und ihre Sitzungen schreibgeschützt. Mit der Berechtigung „Historie endgültig löschen“ kann die vollständige Akte später gelöscht werden.</span></div>
+      </div>
+      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelPsychologyRecordBtn" class="button" type="button">Abbrechen</button><button id="savePsychologyRecordBtn" class="button button-primary" type="submit">Akte speichern</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="psychologySessionDialog">
+    <form id="psychologySessionForm" method="dialog">
+      <div class="dialog-header"><div><p class="eyebrow">Aktenverlauf</p><h2 id="psychologySessionDialogTitle">Sitzung dokumentieren</h2></div><button id="closePsychologySessionDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button></div>
+      <div class="form-body">
+        <input id="psychologySessionId" type="hidden">
+        <div class="form-grid">
+          <label class="field"><span>Datum und Uhrzeit *</span><input id="psychologySessionAt" type="datetime-local" required></label>
+          <label class="field"><span>Behandelnde Person *</span><input id="psychologySessionStaff" required maxlength="120" autocomplete="off"></label>
+          <label class="field field-wide"><span>Anlass *</span><textarea id="psychologySessionReason" required rows="2"></textarea></label>
+          <label class="field field-wide"><span>Gesprächsnotizen / Verlauf *</span><textarea id="psychologySessionNotes" required rows="5"></textarea></label>
+          <label class="field field-wide"><span>Einschätzung / Befund</span><textarea id="psychologySessionAssessment" rows="3"></textarea></label>
+          <label class="field field-wide"><span>Vereinbarte Maßnahmen</span><textarea id="psychologySessionMeasures" rows="3"></textarea></label>
+          <label class="field"><span>Nächster Termin</span><input id="psychologyNextAppointment" type="datetime-local"></label>
+          <label class="field field-wide"><span>Vertraulicher interner Vermerk</span><textarea id="psychologyInternalNote" rows="3"></textarea></label>
+        </div>
+      </div>
+      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelPsychologySessionBtn" class="button" type="button">Abbrechen</button><button id="savePsychologySessionBtn" class="button button-primary" type="submit">Sitzung speichern</button></div>
+    </form>
+  </dialog>
 
   <main id="userManagementMain" class="hidden">
     <section class="incident-intro">
@@ -70,6 +153,7 @@
         <div class="user-permission-fields">
           <label class="check"><input id="newUserCanDeleteHistory" type="checkbox"><span>Historie endgültig löschen</span></label>
           <label class="check"><input id="newUserCanManageUsers" type="checkbox"><span>Benutzer verwalten</span></label>
+          <label class="check"><input id="newUserCanAccessPsychology" type="checkbox"><span>Psychologie öffnen</span></label>
         </div>
         <button id="createUserBtn" class="button button-primary" type="submit">Konto anlegen</button>
       </form>
@@ -382,6 +466,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>
