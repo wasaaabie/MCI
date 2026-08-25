@@ -202,6 +202,26 @@ dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 34
 .psychology-session-content .internal-note { border: 1px solid rgba(240,180,41,.28); background: rgba(240,180,41,.06); }
 .psychology-session-card footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 14px; padding-top: 12px; color: var(--muted); border-top: 1px solid var(--border); font-size: .72rem; }
 #psychologyRecordDialog, #psychologySessionDialog { width: min(860px, calc(100% - 24px)); }
+.fire-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.fire-toolbar { margin-bottom: 18px; }
+.fire-status { display: inline-flex; padding: 5px 9px; border-radius: 999px; color: #d8e0eb; background: rgba(141,150,165,.14); font-size: .68rem; font-weight: 850; text-transform: uppercase; }
+.fire-status.open, .fire-status.investigation { color: #83d9ff; background: rgba(57,163,214,.14); }
+.fire-status.lab_pending, .fire-status.sent, .fire-status.processing { color: #ffd47d; background: rgba(240,180,41,.14); }
+.fire-status.closed, .fire-status.completed { color: #82e4bd; background: rgba(54,179,126,.14); }
+.fire-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+.fire-detail-card { padding: 19px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.fire-detail-card h3 { margin: 5px 0 15px; }
+.fire-detail-card dl { display: grid; gap: 10px; }
+.fire-detail-card dl > div { padding-top: 10px; border-top: 1px solid var(--border); }
+.fire-detail-card dt { margin-bottom: 4px; color: var(--muted); font-size: .67rem; font-weight: 800; text-transform: uppercase; }
+.fire-detail-card dd, .fire-summary-card > p:last-child { color: #d7dee8; line-height: 1.55; }
+.fire-summary-card { grid-column: 1 / -1; }
+.fire-child-section { margin-bottom: 18px; }
+.fire-log-list { display: grid; gap: 10px; }
+.fire-log-entry { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 14px; background: #101822; border: 1px solid var(--border); border-radius: 10px; }
+.fire-log-entry p { margin-bottom: 7px; }.fire-log-entry div > div { color: #d7dee8; line-height: 1.55; }.fire-log-entry small { display: block; margin-top: 8px; color: var(--muted); }
+#fireInvestigationDialog { width: min(920px, calc(100% - 24px)); }
+#firePersonDialog, #fireEvidenceDialog, #fireLogDialog { width: min(760px, calc(100% - 24px)); }
 
 @media (max-width: 900px) { .user-create-form { grid-template-columns: 1fr; }.user-permission-fields { grid-column: auto; } }
-@media (max-width: 680px) { .user-create-section, .user-list-section { padding: 16px; }.user-create-form { gap: 11px; }.psychology-summary, .psychology-record-info { grid-template-columns: 1fr 1fr; }.psychology-detail-header, .psychology-session-card footer { align-items: stretch; flex-direction: column; }.psychology-detail-actions { justify-content: flex-start; }.psychology-record-info .psychology-notes { grid-column: 1 / -1; } }
+@media (max-width: 680px) { .user-create-section, .user-list-section { padding: 16px; }.user-create-form { gap: 11px; }.psychology-summary, .psychology-record-info, .fire-summary, .fire-detail-grid { grid-template-columns: 1fr 1fr; }.psychology-detail-header, .psychology-session-card footer { align-items: stretch; flex-direction: column; }.psychology-detail-actions { justify-content: flex-start; }.psychology-record-info .psychology-notes, .fire-summary-card { grid-column: 1 / -1; } }

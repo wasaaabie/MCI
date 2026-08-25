@@ -53,7 +53,7 @@ Deno.serve(async (request) => {
   if (action === "list") {
     const { data: memberships, error: membershipError } = await admin
       .from("mci_members")
-      .select("user_id, display_name, can_delete_history, can_manage_users, can_access_psychology, created_at")
+      .select("user_id, display_name, can_delete_history, can_manage_users, can_access_psychology, can_access_fire_investigation, created_at")
       .order("created_at");
     if (membershipError) return response({ error: "Benutzer konnten nicht geladen werden." }, 500);
 
@@ -76,6 +76,7 @@ Deno.serve(async (request) => {
         can_delete_history: membership.can_delete_history,
         can_manage_users: membership.can_manage_users,
         can_access_psychology: membership.can_access_psychology,
+        can_access_fire_investigation: membership.can_access_fire_investigation,
         created_at: membership.created_at,
         last_sign_in_at: authUser?.last_sign_in_at || null,
       };
@@ -129,6 +130,7 @@ Deno.serve(async (request) => {
       can_delete_history: Boolean(body.canDeleteHistory),
       can_manage_users: Boolean(body.canManageUsers),
       can_access_psychology: Boolean(body.canAccessPsychology),
+      can_access_fire_investigation: Boolean(body.canAccessFireInvestigation),
     });
     if (insertError) {
       if (createdNewAccount) await admin.auth.admin.deleteUser(authUser.id);
@@ -173,6 +175,7 @@ Deno.serve(async (request) => {
       can_delete_history: Boolean(body.canDeleteHistory),
       can_manage_users: nextCanManageUsers,
       can_access_psychology: Boolean(body.canAccessPsychology),
+      can_access_fire_investigation: Boolean(body.canAccessFireInvestigation),
     }).eq("user_id", userId);
     if (error) return response({ error: "Die Änderungen konnten nicht gespeichert werden." }, 500);
     await admin.auth.admin.updateUserById(userId, { user_metadata: { display_name: displayName } });

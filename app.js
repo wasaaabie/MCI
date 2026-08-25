@@ -26,6 +26,11 @@ let deceasedRecords = [];
 let psychologyRecords = [];
 let psychologySessions = [];
 let currentPsychologyRecord = null;
+let fireInvestigations = [];
+let firePeople = [];
+let fireEvidence = [];
+let fireLogEntries = [];
+let currentFireInvestigation = null;
 let currentIncident = null;
 let db = null;
 let currentUser = null;
@@ -37,6 +42,7 @@ let toastTimer;
 let canDeleteHistory = false;
 let canManageUsers = false;
 let canAccessPsychology = false;
+let canAccessFireInvestigation = false;
 let managedUsers = [];
 let passwordTargetUserId = "";
 
@@ -99,7 +105,7 @@ async function applySession(session) {
 
   const { data: membership, error } = await db
     .from("mci_members")
-    .select("display_name, can_delete_history, can_manage_users, can_access_psychology")
+    .select("display_name, can_delete_history, can_manage_users, can_access_psychology, can_access_fire_investigation")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -115,8 +121,10 @@ async function applySession(session) {
   canDeleteHistory = Boolean(membership.can_delete_history);
   canManageUsers = Boolean(membership.can_manage_users);
   canAccessPsychology = Boolean(membership.can_access_psychology);
+  canAccessFireInvestigation = Boolean(membership.can_access_fire_investigation);
   $("#navUsersBtn").classList.toggle("hidden", !canManageUsers);
   $("#navPsychologyBtn").classList.toggle("hidden", !canAccessPsychology);
+  $("#navFireInvestigationBtn").classList.toggle("hidden", !canAccessFireInvestigation);
   $("#userEmail").textContent = membership.display_name || user.email || "Einsatzkonto";
   $("#authGate").classList.add("hidden");
   $("#appHeader").classList.remove("hidden");
@@ -131,10 +139,16 @@ function showLogin() {
   canDeleteHistory = false;
   canManageUsers = false;
   canAccessPsychology = false;
+  canAccessFireInvestigation = false;
   managedUsers = [];
   psychologyRecords = [];
   psychologySessions = [];
   currentPsychologyRecord = null;
+  fireInvestigations = [];
+  firePeople = [];
+  fireEvidence = [];
+  fireLogEntries = [];
+  currentFireInvestigation = null;
   bulletinEntries = [];
   labEntries = [];
   deceasedRecords = [];
@@ -143,9 +157,12 @@ function showLogin() {
   $("#appNav").classList.add("hidden");
   $("#navUsersBtn").classList.add("hidden");
   $("#navPsychologyBtn").classList.add("hidden");
+  $("#navFireInvestigationBtn").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   $("#psychologyMain").classList.add("hidden");
   $("#psychologyDetailMain").classList.add("hidden");
+  $("#fireInvestigationMain").classList.add("hidden");
+  $("#fireInvestigationDetailMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
@@ -159,6 +176,7 @@ function showLogin() {
   if ($("#passwordDialog").open) $("#passwordDialog").close();
   if ($("#psychologyRecordDialog").open) $("#psychologyRecordDialog").close();
   if ($("#psychologySessionDialog").open) $("#psychologySessionDialog").close();
+  ["#fireInvestigationDialog", "#firePersonDialog", "#fireEvidenceDialog", "#fireLogDialog"].forEach(selector => { if ($(selector).open) $(selector).close(); });
 }
 
 function setAuthError(message) {
@@ -246,6 +264,10 @@ function startRealtime() {
       if (currentPsychologyRecord && payload.new?.record_id === currentPsychologyRecord.id) loadPsychologySessions();
       if (!$("#psychologyMain").classList.contains("hidden")) loadPsychologyRecords();
     })
+    .on("postgres_changes", { event: "*", schema: "public", table: "fire_investigations" }, () => refreshFireInvestigationView())
+    .on("postgres_changes", { event: "*", schema: "public", table: "fire_investigation_people" }, () => refreshFireInvestigationChildren())
+    .on("postgres_changes", { event: "*", schema: "public", table: "fire_investigation_evidence" }, () => refreshFireInvestigationChildren())
+    .on("postgres_changes", { event: "*", schema: "public", table: "fire_investigation_log" }, () => refreshFireInvestigationChildren())
     .subscribe();
 }
 
@@ -297,8 +319,19 @@ function hidePsychologyViews() {
   psychologySessions = [];
 }
 
+function hideFireInvestigationViews() {
+  $("#fireInvestigationMain").classList.add("hidden");
+  $("#fireInvestigationDetailMain").classList.add("hidden");
+  currentFireInvestigation = null;
+  firePeople = [];
+  fireEvidence = [];
+  fireLogEntries = [];
+}
+
 function showIncidentOverview() {
   currentIncident = null;
+  currentPsychologyRecord = null;
+  currentFireInvestigation = null;
   patients = [];
   activities = [];
   $("#pageTitle").textContent = "MCI Übersicht";
@@ -307,6 +340,7 @@ function showIncidentOverview() {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hideFireInvestigationViews();
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
@@ -331,6 +365,7 @@ async function openIncident(id) {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hideFireInvestigationViews();
   $("#appMain").classList.remove("hidden");
   $("#pageTitle").textContent = incident.title;
   $("#incidentTitle").textContent = incident.title;
@@ -366,6 +401,7 @@ async function showBulletinBoard() {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hideFireInvestigationViews();
   $("#bulletinMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
@@ -384,12 +420,14 @@ function setActiveNav(section) {
   $("#navDeceasedBtn").classList.toggle("active", section === "deceased");
   $("#navUsersBtn").classList.toggle("active", section === "users");
   $("#navPsychologyBtn").classList.toggle("active", section === "psychology");
+  $("#navFireInvestigationBtn").classList.toggle("active", section === "fire");
   $("#navIncidentsBtn").setAttribute("aria-current", section === "incidents" ? "page" : "false");
   $("#navBulletinBtn").setAttribute("aria-current", section === "bulletin" ? "page" : "false");
   $("#navLabBtn").setAttribute("aria-current", section === "lab" ? "page" : "false");
   $("#navDeceasedBtn").setAttribute("aria-current", section === "deceased" ? "page" : "false");
   $("#navUsersBtn").setAttribute("aria-current", section === "users" ? "page" : "false");
   $("#navPsychologyBtn").setAttribute("aria-current", section === "psychology" ? "page" : "false");
+  $("#navFireInvestigationBtn").setAttribute("aria-current", section === "fire" ? "page" : "false");
 }
 
 async function callUserManagement(action, payload = {}) {
@@ -411,10 +449,12 @@ async function callUserManagement(action, payload = {}) {
 async function showUserManagement() {
   if (!canManageUsers) return;
   currentIncident = null;
+  currentPsychologyRecord = null;
+  currentFireInvestigation = null;
   patients = [];
   activities = [];
   $("#pageTitle").textContent = "Benutzerverwaltung";
-  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#psychologyMain", "#psychologyDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#psychologyMain", "#psychologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
   $("#userManagementMain").classList.remove("hidden");
   ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
   setActiveNav("users");
@@ -448,7 +488,7 @@ function renderManagedUsers() {
         <td><input class="table-text-input" data-user-name value="${escapeHtml(user.display_name || "")}" maxlength="80" aria-label="Anzeigename von ${escapeHtml(user.email)}"></td>
         <td><strong>${escapeHtml(user.email)}</strong></td>
         <td class="bulletin-date">${formatDate(user.last_sign_in_at)}</td>
-        <td><div class="user-row-permissions"><label class="check"><input data-user-delete-history type="checkbox" ${user.can_delete_history ? "checked" : ""}><span>Historie löschen</span></label><label class="check"><input data-user-manage-users type="checkbox" ${user.can_manage_users ? "checked" : ""} ${isSelf ? "disabled" : ""}><span>Benutzer verwalten</span></label><label class="check"><input data-user-access-psychology type="checkbox" ${user.can_access_psychology ? "checked" : ""}><span>Psychologie öffnen</span></label></div></td>
+        <td><div class="user-row-permissions"><label class="check"><input data-user-delete-history type="checkbox" ${user.can_delete_history ? "checked" : ""}><span>Historie löschen</span></label><label class="check"><input data-user-manage-users type="checkbox" ${user.can_manage_users ? "checked" : ""} ${isSelf ? "disabled" : ""}><span>Benutzer verwalten</span></label><label class="check"><input data-user-access-psychology type="checkbox" ${user.can_access_psychology ? "checked" : ""}><span>Psychologie öffnen</span></label><label class="check"><input data-user-access-fire type="checkbox" ${user.can_access_fire_investigation ? "checked" : ""}><span>Fire Investigation öffnen</span></label></div></td>
         <td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-save-user="${user.id}">Speichern</button><button class="bulletin-edit-button" type="button" data-reset-password="${user.id}">Passwort setzen</button><button class="button-link-danger" type="button" data-revoke-user="${user.id}" ${isSelf ? "disabled title=\"Der eigene Zugriff kann nicht entzogen werden\"" : ""}>Zugriff entziehen</button></div></td>
       </tr>`;
     }).join("")
@@ -487,7 +527,8 @@ async function saveManagedUser(userId) {
       displayName,
       canDeleteHistory: row.querySelector("[data-user-delete-history]").checked,
       canManageUsers: row.querySelector("[data-user-manage-users]").checked,
-      canAccessPsychology: row.querySelector("[data-user-access-psychology]").checked
+      canAccessPsychology: row.querySelector("[data-user-access-psychology]").checked,
+      canAccessFireInvestigation: row.querySelector("[data-user-access-fire]").checked
     });
     await loadManagedUsers();
     showToast("Benutzer und Berechtigungen wurden gespeichert.");
@@ -576,9 +617,10 @@ async function showPsychologyOverview() {
   if (!canAccessPsychology) return;
   currentIncident = null;
   currentPsychologyRecord = null;
+  currentFireInvestigation = null;
   psychologySessions = [];
   $("#pageTitle").textContent = "Psychologie";
-  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
   $("#psychologyMain").classList.remove("hidden");
   ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
   setActiveNav("psychology");
@@ -761,6 +803,190 @@ async function deleteCurrentPsychologyRecord() {
   showToast("Die Psychologie-Akte wurde endgültig gelöscht.");
 }
 
+const fireStatusLabels = { open: "Offen", investigation: "Untersuchung", lab_pending: "Labor ausstehend", closed: "Abgeschlossen" };
+const fireCauseLabels = { technical: "Technisch", negligent: "Fahrlässig", intentional: "Vorsätzlich", natural: "Natürlich", undetermined: "Ungeklärt" };
+const fireCauseStatusLabels = { unknown: "Unbekannt", suspected: "Vermutet", confirmed: "Bestätigt" };
+const firePersonRoleLabels = { owner: "Eigentümer", resident: "Bewohner", witness: "Zeuge", injured: "Geschädigter", suspect: "Beschuldigte Person", other: "Sonstige" };
+const fireLabStatusLabels = { not_sent: "Nicht versendet", sent: "Versendet", processing: "In Bearbeitung", completed: "Abgeschlossen" };
+const fireLogTypeLabels = { investigation: "Untersuchung", interview: "Befragung", evidence: "Probenentnahme", lab: "Laborergebnis", handoff: "Übergabe", cause: "Ursachenstatus", note: "Notiz" };
+
+async function showFireInvestigationOverview() {
+  if (!canAccessFireInvestigation) return;
+  currentIncident = null;
+  currentFireInvestigation = null;
+  currentPsychologyRecord = null;
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyMain", "#psychologyDetailMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  $("#fireInvestigationMain").classList.remove("hidden");
+  ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
+  $("#pageTitle").textContent = "Fire Investigation";
+  setActiveNav("fire");
+  await loadFireInvestigations();
+}
+
+async function loadFireInvestigations() {
+  if (!db || !canAccessFireInvestigation) return;
+  const [{ data, error }, { data: people }] = await Promise.all([
+    db.from("fire_investigations").select("*").order("incident_date", { ascending: false }),
+    db.from("fire_investigation_people").select("investigation_id, person_name")
+  ]);
+  if (error) {
+    fireInvestigations = [];
+    showToast("Brandermittlungsakten konnten nicht geladen werden.");
+  } else {
+    const namesByCase = new Map();
+    (people || []).forEach(person => namesByCase.set(person.investigation_id, `${namesByCase.get(person.investigation_id) || ""} ${person.person_name}`));
+    fireInvestigations = (data || []).map(item => ({ ...item, people_search: namesByCase.get(item.id) || "" }));
+  }
+  renderFireInvestigations();
+}
+
+function renderFireInvestigations() {
+  const search = $("#fireSearch").value.trim().toLowerCase();
+  const status = $("#fireStatusFilter").value;
+  const cause = $("#fireCauseFilter").value;
+  const visible = fireInvestigations.filter(item => {
+    const haystack = `${item.case_number} ${item.object_name} ${item.location} ${item.lead_investigator} ${item.people_search}`.toLowerCase();
+    return (!search || haystack.includes(search)) && (!status || item.status === status) && (!cause || item.cause_classification === cause);
+  });
+  $("#fireTotalCount").textContent = fireInvestigations.length;
+  $("#fireOpenCount").textContent = fireInvestigations.filter(item => item.status === "open" || item.status === "investigation").length;
+  $("#fireLabCount").textContent = fireInvestigations.filter(item => item.status === "lab_pending").length;
+  $("#fireClosedCount").textContent = fireInvestigations.filter(item => item.status === "closed").length;
+  $("#fireVisibleCount").textContent = visible.length;
+  $("#fireInvestigationsBody").innerHTML = visible.length ? visible.map(item => `<tr><td><strong>${escapeHtml(item.case_number)}</strong></td><td><strong>${escapeHtml(item.object_name)}</strong><br><small>${escapeHtml(item.location)}</small></td><td>${escapeHtml(item.lead_investigator)}</td><td><span class="fire-status ${item.status}">${fireStatusLabels[item.status]}</span></td><td>${escapeHtml(fireCauseLabels[item.cause_classification] || "Ungeklärt")}<br><small>${escapeHtml(fireCauseStatusLabels[item.cause_status] || "Unbekannt")}</small></td><td class="bulletin-date">${formatDate(item.incident_date)}</td><td><button class="bulletin-edit-button" type="button" data-open-fire="${item.id}">Akte öffnen</button></td></tr>`).join("") : `<tr><td class="table-empty" colspan="7">Keine passenden Brandermittlungsakten vorhanden.</td></tr>`;
+  document.querySelectorAll("[data-open-fire]").forEach(button => button.addEventListener("click", () => openFireInvestigation(button.dataset.openFire)));
+}
+
+async function openFireInvestigation(id) {
+  let investigation = fireInvestigations.find(item => item.id === id);
+  if (!investigation) {
+    const { data } = await db.from("fire_investigations").select("*").eq("id", id).maybeSingle();
+    investigation = data;
+  }
+  if (!investigation) return showToast("Brandermittlungsakte wurde nicht gefunden.");
+  currentFireInvestigation = investigation;
+  $("#fireInvestigationMain").classList.add("hidden");
+  $("#fireInvestigationDetailMain").classList.remove("hidden");
+  $("#pageTitle").textContent = `Brandakte ${investigation.case_number}`;
+  setActiveNav("fire");
+  renderFireInvestigationDetail();
+  await loadFireInvestigationChildren();
+}
+
+async function refreshFireInvestigationView() {
+  if (!canAccessFireInvestigation) return;
+  if (!$("#fireInvestigationMain").classList.contains("hidden")) await loadFireInvestigations();
+  if (currentFireInvestigation) {
+    const { data } = await db.from("fire_investigations").select("*").eq("id", currentFireInvestigation.id).maybeSingle();
+    if (!data) return showFireInvestigationOverview();
+    currentFireInvestigation = data;
+    renderFireInvestigationDetail();
+  }
+}
+
+async function refreshFireInvestigationChildren() {
+  if (currentFireInvestigation) await loadFireInvestigationChildren();
+  if (!$("#fireInvestigationMain").classList.contains("hidden")) await loadFireInvestigations();
+}
+
+function fireDetailRows(rows) {
+  return rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value ? formatMultiline(value) : "–"}</dd></div>`).join("");
+}
+
+function renderFireInvestigationDetail() {
+  const item = currentFireInvestigation;
+  if (!item) return;
+  const closed = item.status === "closed";
+  $("#fireInvestigationStatusLabel").textContent = fireStatusLabels[item.status] || "Brandermittlung";
+  $("#fireInvestigationTitle").textContent = `${item.case_number} · ${item.object_name}`;
+  $("#fireInvestigationMeta").textContent = `${item.location} · Einsatz ${formatDate(item.incident_date)} · Leitung: ${item.lead_investigator}`;
+  const linkedIncident = incidents.find(incident => incident.id === item.linked_incident_id);
+  if (linkedIncident) $("#fireInvestigationMeta").textContent += ` · MCI: ${linkedIncident.title}`;
+  $("#fireObjectName").textContent = item.object_name;
+  $("#fireObjectDetails").innerHTML = fireDetailRows([["Objektart", item.object_type], ["Eigentümer / Betreiber", item.owner_operator], ["Brandentstehungsbereich", item.origin_area], ["Schäden", item.damages], ["Zustand der Brandstelle", item.scene_condition], ["Brandschutzeinrichtungen", item.protection_systems], ["Brandschutzmängel", item.protection_defects]]);
+  $("#fireCauseTitle").textContent = `${fireCauseLabels[item.cause_classification]} · ${fireCauseStatusLabels[item.cause_status]}`;
+  $("#fireCauseDetails").innerHTML = fireDetailRows([["Zündquelle", item.ignition_source], ["Brennstoff / Brandlast", item.fuel_load], ["Begründung / Ergebnis", item.cause_reasoning]]);
+  $("#fireInvestigationSummary").textContent = item.summary || "Keine Zusammenfassung hinterlegt.";
+  $("#fireReadOnlyBadge").classList.toggle("hidden", !closed);
+  $("#editFireInvestigationBtn").classList.toggle("hidden", closed);
+  ["#newFirePersonBtn", "#newFireEvidenceBtn", "#newFireLogBtn"].forEach(selector => $(selector).classList.toggle("hidden", closed));
+  $("#deleteFireInvestigationBtn").classList.toggle("hidden", !(closed && canDeleteHistory));
+}
+
+async function loadFireInvestigationChildren() {
+  if (!currentFireInvestigation) return;
+  const id = currentFireInvestigation.id;
+  const [peopleResult, evidenceResult, logResult] = await Promise.all([
+    db.from("fire_investigation_people").select("*").eq("investigation_id", id).order("created_at"),
+    db.from("fire_investigation_evidence").select("*").eq("investigation_id", id).order("created_at"),
+    db.from("fire_investigation_log").select("*").eq("investigation_id", id).order("entry_at", { ascending: false })
+  ]);
+  firePeople = peopleResult.data || [];
+  fireEvidence = evidenceResult.data || [];
+  fireLogEntries = logResult.data || [];
+  renderFirePeople(); renderFireEvidence(); renderFireLog();
+}
+
+function renderFirePeople() {
+  const editable = currentFireInvestigation?.status !== "closed";
+  $("#firePeopleBody").innerHTML = firePeople.length ? firePeople.map(person => `<tr><td><strong>${escapeHtml(person.person_name)}</strong></td><td>${firePersonRoleLabels[person.person_role] || "Sonstige"}</td><td>${escapeHtml(person.phone || "–")}</td><td>${escapeHtml(person.contact_status || "–")}</td><td class="bulletin-concern">${escapeHtml(person.statement || "–")}</td><td>${editable ? `<button class="bulletin-edit-button" type="button" data-edit-fire-person="${person.id}">Bearbeiten</button>` : ""}</td></tr>`).join("") : `<tr><td class="table-empty" colspan="6">Keine betroffenen Personen erfasst.</td></tr>`;
+  document.querySelectorAll("[data-edit-fire-person]").forEach(button => button.addEventListener("click", () => openFirePersonDialog(button.dataset.editFirePerson)));
+}
+
+function renderFireEvidence() {
+  const editable = currentFireInvestigation?.status !== "closed";
+  $("#fireEvidenceBody").innerHTML = fireEvidence.length ? fireEvidence.map(item => `<tr><td><strong>${escapeHtml(item.evidence_number)}</strong><br><small>${escapeHtml(item.evidence_type)}</small></td><td>${escapeHtml(item.found_location || "–")}</td><td>${item.collected_at ? formatDate(item.collected_at) : "–"}<br><small>${escapeHtml(item.collected_by || "")}</small></td><td><span class="fire-status ${item.lab_status}">${fireLabStatusLabels[item.lab_status]}</span>${item.lab_number ? `<br><small>${escapeHtml(item.lab_number)}</small>` : ""}</td><td class="bulletin-concern">${escapeHtml(item.result || "Noch kein Ergebnis")}</td><td>${editable ? `<button class="bulletin-edit-button" type="button" data-edit-fire-evidence="${item.id}">Bearbeiten</button>` : ""}</td></tr>`).join("") : `<tr><td class="table-empty" colspan="6">Keine Proben oder Beweismittel erfasst.</td></tr>`;
+  document.querySelectorAll("[data-edit-fire-evidence]").forEach(button => button.addEventListener("click", () => openFireEvidenceDialog(button.dataset.editFireEvidence)));
+}
+
+function renderFireLog() {
+  $("#fireLogCount").textContent = fireLogEntries.length;
+  $("#fireLogList").innerHTML = fireLogEntries.length ? fireLogEntries.map(entry => `<article class="fire-log-entry"><div class="activity-icon">${escapeHtml((fireLogTypeLabels[entry.entry_type] || "N").slice(0, 1))}</div><div><p><strong>${escapeHtml(fireLogTypeLabels[entry.entry_type] || "Notiz")}</strong> · ${formatDate(entry.entry_at)}</p><div>${formatMultiline(entry.description)}</div><small>Dokumentiert von ${escapeHtml(entry.created_by_name || "Unbekannt")} am ${formatDate(entry.created_at)}</small></div></article>`).join("") : `<div class="activity-empty">Noch keine Untersuchungsschritte dokumentiert.</div>`;
+}
+
+function openFireInvestigationDialog(id = "") {
+  const item = fireInvestigations.find(entry => entry.id === id) || (currentFireInvestigation?.id === id ? currentFireInvestigation : null);
+  $("#fireInvestigationForm").reset(); $("#fireInvestigationId").value = item?.id || "";
+  $("#fireInvestigationDialogTitle").textContent = item ? "Ermittlungsakte bearbeiten" : "Ermittlungsakte anlegen";
+  $("#fireLinkedIncident").innerHTML = `<option value="">Keine Verknüpfung</option>${incidents.map(incident => `<option value="${incident.id}">${escapeHtml(incident.title)} · ${escapeHtml(incident.location || "ohne Ort")}</option>`).join("")}`;
+  $("#fireInvestigationStatus").querySelector('option[value="closed"]').disabled = !item;
+  const mapping = { fireCaseNumber: "case_number", fireLocation: "location", fireLeadInvestigator: "lead_investigator", fireInvolvedStaff: "involved_staff", fireSummary: "summary", fireObject: "object_name", fireObjectType: "object_type", fireOwnerOperator: "owner_operator", fireOriginArea: "origin_area", fireDamages: "damages", fireSceneCondition: "scene_condition", fireProtectionSystems: "protection_systems", fireProtectionDefects: "protection_defects", fireIgnitionSource: "ignition_source", fireFuelLoad: "fuel_load", fireCauseReasoning: "cause_reasoning" };
+  Object.entries(mapping).forEach(([elementId, key]) => { $("#" + elementId).value = item?.[key] || ""; });
+  $("#fireIncidentDate").value = localDateTimeValue(item?.incident_date ? new Date(item.incident_date) : new Date());
+  $("#fireReportedAt").value = item?.reported_at ? localDateTimeValue(new Date(item.reported_at)) : "";
+  $("#fireInvestigationStatus").value = item?.status || "open";
+  $("#fireCauseStatus").value = item?.cause_status || "unknown";
+  $("#fireCauseClassification").value = item?.cause_classification || "undetermined";
+  $("#fireLinkedIncident").value = item?.linked_incident_id || "";
+  setFireCloseWarning(); $("#fireInvestigationDialog").showModal();
+}
+
+function setFireCloseWarning() { $("#fireCloseWarning").classList.toggle("hidden", !$("#fireInvestigationId").value || $("#fireInvestigationStatus").value !== "closed"); }
+
+function openFirePersonDialog(id = "") {
+  if (!currentFireInvestigation || currentFireInvestigation.status === "closed") return;
+  const person = firePeople.find(item => item.id === id); $("#firePersonForm").reset(); $("#firePersonId").value = person?.id || "";
+  $("#firePersonDialogTitle").textContent = person ? "Person bearbeiten" : "Person erfassen";
+  $("#firePersonName").value = person?.person_name || ""; $("#firePersonPhone").value = person?.phone || ""; $("#firePersonRole").value = person?.person_role || "owner"; $("#firePersonContactStatus").value = person?.contact_status || ""; $("#firePersonStatement").value = person?.statement || ""; $("#firePersonDialog").showModal();
+}
+
+function openFireEvidenceDialog(id = "") {
+  if (!currentFireInvestigation || currentFireInvestigation.status === "closed") return;
+  const item = fireEvidence.find(entry => entry.id === id); $("#fireEvidenceForm").reset(); $("#fireEvidenceId").value = item?.id || "";
+  $("#fireEvidenceDialogTitle").textContent = item ? "Beweismittel bearbeiten" : "Beweismittel erfassen";
+  $("#fireEvidenceNumber").value = item?.evidence_number || ""; $("#fireEvidenceType").value = item?.evidence_type || ""; $("#fireEvidenceLocation").value = item?.found_location || ""; $("#fireEvidenceCollectedAt").value = item?.collected_at ? localDateTimeValue(new Date(item.collected_at)) : ""; $("#fireEvidenceCollectedBy").value = item?.collected_by || ""; $("#fireEvidenceLabStatus").value = item?.lab_status || "not_sent"; $("#fireEvidenceLabNumber").value = item?.lab_number || ""; $("#fireEvidenceResult").value = item?.result || ""; $("#fireEvidenceCustody").value = item?.chain_of_custody || ""; $("#fireEvidenceDialog").showModal();
+}
+
+function openFireLogDialog() { if (!currentFireInvestigation || currentFireInvestigation.status === "closed") return; $("#fireLogForm").reset(); $("#fireLogAt").value = localDateTimeValue(new Date()); $("#fireLogDialog").showModal(); }
+
+async function deleteCurrentFireInvestigation() {
+  const item = currentFireInvestigation;
+  if (!item || item.status !== "closed" || !canDeleteHistory || !confirm(`Brandermittlungsakte „${item.case_number}“ einschließlich Personen, Beweismitteln und Verlauf endgültig löschen?`)) return;
+  const { error } = await db.rpc("delete_history_entry", { p_entry_type: "fire_investigation", p_entry_id: item.id });
+  if (error) return showToast("Die Brandermittlungsakte konnte nicht gelöscht werden.");
+  currentFireInvestigation = null; await showFireInvestigationOverview(); showToast("Brandermittlungsakte wurde endgültig gelöscht.");
+}
+
 async function showLabRequests() {
   currentIncident = null;
   patients = [];
@@ -772,6 +998,7 @@ async function showLabRequests() {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hideFireInvestigationViews();
   $("#labMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
@@ -854,6 +1081,7 @@ async function showDeceasedOverview() {
   $("#labMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hideFireInvestigationViews();
   $("#deceasedMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
@@ -1328,6 +1556,44 @@ function showToast(message) {
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 3000);
 }
 
+$("#fireInvestigationForm").addEventListener("submit", async event => {
+  event.preventDefault(); if (!event.currentTarget.reportValidity() || !canAccessFireInvestigation) return;
+  const id = $("#fireInvestigationId").value;
+  const values = {
+    case_number: $("#fireCaseNumber").value.trim(), status: id ? $("#fireInvestigationStatus").value : "open",
+    incident_date: new Date($("#fireIncidentDate").value).toISOString(), reported_at: $("#fireReportedAt").value ? new Date($("#fireReportedAt").value).toISOString() : null,
+    location: $("#fireLocation").value.trim(), lead_investigator: $("#fireLeadInvestigator").value.trim(), involved_staff: $("#fireInvolvedStaff").value.trim() || null, summary: $("#fireSummary").value.trim() || null,
+    object_name: $("#fireObject").value.trim(), object_type: $("#fireObjectType").value.trim() || null, owner_operator: $("#fireOwnerOperator").value.trim() || null, origin_area: $("#fireOriginArea").value.trim() || null,
+    damages: $("#fireDamages").value.trim() || null, scene_condition: $("#fireSceneCondition").value.trim() || null, protection_systems: $("#fireProtectionSystems").value.trim() || null, protection_defects: $("#fireProtectionDefects").value.trim() || null,
+    cause_status: $("#fireCauseStatus").value, cause_classification: $("#fireCauseClassification").value, ignition_source: $("#fireIgnitionSource").value.trim() || null, fuel_load: $("#fireFuelLoad").value.trim() || null, cause_reasoning: $("#fireCauseReasoning").value.trim() || null, linked_incident_id: $("#fireLinkedIncident").value || null
+  };
+  const button = $("#saveFireInvestigationBtn"); button.disabled = true; button.textContent = "Wird gespeichert …";
+  const result = id ? await db.from("fire_investigations").update(values).eq("id", id).select("id").single() : await db.from("fire_investigations").insert({ id: createUuid(), ...values }).select("id").single();
+  button.disabled = false; button.textContent = "Akte speichern";
+  if (result.error) return showToast(result.error.code === "23505" ? "Diese Aktennummer wird bereits verwendet." : "Ermittlungsakte konnte nicht gespeichert werden.");
+  $("#fireInvestigationDialog").close(); await loadFireInvestigations(); await openFireInvestigation(result.data.id); showToast(id ? "Ermittlungsakte wurde aktualisiert." : "Ermittlungsakte wurde angelegt.");
+});
+
+$("#firePersonForm").addEventListener("submit", async event => {
+  event.preventDefault(); if (!event.currentTarget.reportValidity() || !currentFireInvestigation) return;
+  const id = $("#firePersonId").value; const values = { investigation_id: currentFireInvestigation.id, person_name: $("#firePersonName").value.trim(), phone: $("#firePersonPhone").value.trim() || null, person_role: $("#firePersonRole").value, contact_status: $("#firePersonContactStatus").value.trim() || null, statement: $("#firePersonStatement").value.trim() || null };
+  const result = id ? await db.from("fire_investigation_people").update(values).eq("id", id) : await db.from("fire_investigation_people").insert({ id: createUuid(), ...values });
+  if (result.error) return showToast("Person konnte nicht gespeichert werden."); $("#firePersonDialog").close(); await loadFireInvestigationChildren(); showToast("Person wurde gespeichert.");
+});
+
+$("#fireEvidenceForm").addEventListener("submit", async event => {
+  event.preventDefault(); if (!event.currentTarget.reportValidity() || !currentFireInvestigation) return;
+  const id = $("#fireEvidenceId").value; const values = { investigation_id: currentFireInvestigation.id, evidence_number: $("#fireEvidenceNumber").value.trim(), evidence_type: $("#fireEvidenceType").value.trim(), found_location: $("#fireEvidenceLocation").value.trim() || null, collected_at: $("#fireEvidenceCollectedAt").value ? new Date($("#fireEvidenceCollectedAt").value).toISOString() : null, collected_by: $("#fireEvidenceCollectedBy").value.trim() || null, lab_status: $("#fireEvidenceLabStatus").value, lab_number: $("#fireEvidenceLabNumber").value.trim() || null, result: $("#fireEvidenceResult").value.trim() || null, chain_of_custody: $("#fireEvidenceCustody").value.trim() || null };
+  const result = id ? await db.from("fire_investigation_evidence").update(values).eq("id", id) : await db.from("fire_investigation_evidence").insert({ id: createUuid(), ...values });
+  if (result.error) return showToast(result.error.code === "23505" ? "Diese Beweismittelnummer existiert in der Akte bereits." : "Beweismittel konnte nicht gespeichert werden."); $("#fireEvidenceDialog").close(); await loadFireInvestigationChildren(); showToast("Beweismittel wurde gespeichert.");
+});
+
+$("#fireLogForm").addEventListener("submit", async event => {
+  event.preventDefault(); if (!event.currentTarget.reportValidity() || !currentFireInvestigation) return;
+  const { error } = await db.from("fire_investigation_log").insert({ id: createUuid(), investigation_id: currentFireInvestigation.id, entry_at: new Date($("#fireLogAt").value).toISOString(), entry_type: $("#fireLogType").value, description: $("#fireLogDescription").value.trim() });
+  if (error) return showToast("Verlaufseintrag konnte nicht gespeichert werden."); $("#fireLogDialog").close(); await loadFireInvestigationChildren(); showToast("Verlaufseintrag wurde dokumentiert.");
+});
+
 $("#psychologyRecordForm").addEventListener("submit", async event => {
   event.preventDefault();
   const recordForm = event.currentTarget;
@@ -1567,7 +1833,8 @@ $("#createUserForm").addEventListener("submit", async event => {
       displayName: $("#newUserDisplayName").value.trim(),
       canDeleteHistory: $("#newUserCanDeleteHistory").checked,
       canManageUsers: $("#newUserCanManageUsers").checked,
-      canAccessPsychology: $("#newUserCanAccessPsychology").checked
+      canAccessPsychology: $("#newUserCanAccessPsychology").checked,
+      canAccessFireInvestigation: $("#newUserCanAccessFireInvestigation").checked
     });
     createForm.reset();
     await loadManagedUsers();
@@ -1623,6 +1890,7 @@ $("#navBulletinBtn").addEventListener("click", showBulletinBoard);
 $("#navLabBtn").addEventListener("click", showLabRequests);
 $("#navDeceasedBtn").addEventListener("click", showDeceasedOverview);
 $("#navPsychologyBtn").addEventListener("click", showPsychologyOverview);
+$("#navFireInvestigationBtn").addEventListener("click", showFireInvestigationOverview);
 $("#navUsersBtn").addEventListener("click", showUserManagement);
 $("#navCollapseBtn").addEventListener("click", () => setNavCollapsed(!$("#appNav").classList.contains("collapsed")));
 $("#newBulletinBtn").addEventListener("click", () => openBulletinDialog());
@@ -1636,6 +1904,13 @@ $("#backToPsychologyBtn").addEventListener("click", showPsychologyOverview);
 $("#editPsychologyRecordBtn").addEventListener("click", () => openPsychologyRecordDialog(currentPsychologyRecord?.id || ""));
 $("#newPsychologySessionBtn").addEventListener("click", () => openPsychologySessionDialog());
 $("#deletePsychologyRecordBtn").addEventListener("click", deleteCurrentPsychologyRecord);
+$("#newFireInvestigationBtn").addEventListener("click", () => openFireInvestigationDialog());
+$("#backToFireInvestigationsBtn").addEventListener("click", showFireInvestigationOverview);
+$("#editFireInvestigationBtn").addEventListener("click", () => openFireInvestigationDialog(currentFireInvestigation?.id || ""));
+$("#deleteFireInvestigationBtn").addEventListener("click", deleteCurrentFireInvestigation);
+$("#newFirePersonBtn").addEventListener("click", () => openFirePersonDialog());
+$("#newFireEvidenceBtn").addEventListener("click", () => openFireEvidenceDialog());
+$("#newFireLogBtn").addEventListener("click", openFireLogDialog);
 $("#closeBulletinDialogBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#cancelBulletinBtn").addEventListener("click", () => $("#bulletinDialog").close());
 $("#closeLabDialogBtn").addEventListener("click", () => $("#labDialog").close());
@@ -1646,6 +1921,7 @@ $("#closePsychologyRecordDialogBtn").addEventListener("click", () => $("#psychol
 $("#cancelPsychologyRecordBtn").addEventListener("click", () => $("#psychologyRecordDialog").close());
 $("#closePsychologySessionDialogBtn").addEventListener("click", () => $("#psychologySessionDialog").close());
 $("#cancelPsychologySessionBtn").addEventListener("click", () => $("#psychologySessionDialog").close());
+[["#closeFireInvestigationDialogBtn", "#fireInvestigationDialog"], ["#cancelFireInvestigationBtn", "#fireInvestigationDialog"], ["#closeFirePersonDialogBtn", "#firePersonDialog"], ["#cancelFirePersonBtn", "#firePersonDialog"], ["#closeFireEvidenceDialogBtn", "#fireEvidenceDialog"], ["#cancelFireEvidenceBtn", "#fireEvidenceDialog"], ["#closeFireLogDialogBtn", "#fireLogDialog"], ["#cancelFireLogBtn", "#fireLogDialog"]].forEach(([button, target]) => $(button).addEventListener("click", () => $(target).close()));
 $("#closePasswordDialogBtn").addEventListener("click", () => $("#passwordDialog").close());
 $("#cancelPasswordBtn").addEventListener("click", () => $("#passwordDialog").close());
 $("#releaseChamberBtn").addEventListener("click", releaseDeceasedChamber);
@@ -1667,6 +1943,10 @@ $("#psychologySearch").addEventListener("input", renderPsychologyRecords);
 $("#psychologyStatusFilter").addEventListener("change", renderPsychologyRecords);
 $("#userSearch").addEventListener("input", renderManagedUsers);
 $("#psychologyRecordStatus").addEventListener("change", setPsychologyCloseWarning);
+$("#fireSearch").addEventListener("input", renderFireInvestigations);
+$("#fireStatusFilter").addEventListener("change", renderFireInvestigations);
+$("#fireCauseFilter").addEventListener("change", renderFireInvestigations);
+$("#fireInvestigationStatus").addEventListener("change", setFireCloseWarning);
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 $("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
 $("#bulletinDialog").addEventListener("click", event => { if (event.target === $("#bulletinDialog")) $("#bulletinDialog").close(); });
@@ -1675,5 +1955,6 @@ $("#deceasedDialog").addEventListener("click", event => { if (event.target === $
 $("#passwordDialog").addEventListener("click", event => { if (event.target === $("#passwordDialog")) $("#passwordDialog").close(); });
 $("#psychologyRecordDialog").addEventListener("click", event => { if (event.target === $("#psychologyRecordDialog")) $("#psychologyRecordDialog").close(); });
 $("#psychologySessionDialog").addEventListener("click", event => { if (event.target === $("#psychologySessionDialog")) $("#psychologySessionDialog").close(); });
+["#fireInvestigationDialog", "#firePersonDialog", "#fireEvidenceDialog", "#fireLogDialog"].forEach(selector => $(selector).addEventListener("click", event => { if (event.target === $(selector)) $(selector).close(); }));
 
 initialize();

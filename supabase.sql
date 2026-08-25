@@ -8,12 +8,14 @@ create table if not exists public.mci_members (
   can_delete_history boolean not null default false,
   can_manage_users boolean not null default false,
   can_access_psychology boolean not null default false,
+  can_access_fire_investigation boolean not null default false,
   created_at timestamptz not null default now()
 );
 
 alter table public.mci_members add column if not exists can_delete_history boolean not null default false;
 alter table public.mci_members add column if not exists can_manage_users boolean not null default false;
 alter table public.mci_members add column if not exists can_access_psychology boolean not null default false;
+alter table public.mci_members add column if not exists can_access_fire_investigation boolean not null default false;
 
 -- Bei der erstmaligen Migration erhält das älteste freigegebene Konto die Benutzerverwaltung.
 -- So bleibt die Funktion nach dem Update erreichbar, ohne pauschal alle Mitglieder hochzustufen.
@@ -159,6 +161,89 @@ create table if not exists public.psychology_sessions (
   updated_at timestamptz
 );
 
+create table if not exists public.fire_investigations (
+  id uuid primary key,
+  case_number text not null,
+  status text not null default 'open' check (status in ('open', 'investigation', 'lab_pending', 'closed')),
+  incident_date timestamptz not null,
+  reported_at timestamptz,
+  location text not null,
+  lead_investigator text not null,
+  involved_staff text,
+  summary text,
+  object_name text not null,
+  object_type text,
+  owner_operator text,
+  origin_area text,
+  damages text,
+  scene_condition text,
+  protection_systems text,
+  protection_defects text,
+  cause_status text not null default 'unknown' check (cause_status in ('unknown', 'suspected', 'confirmed')),
+  cause_classification text not null default 'undetermined' check (cause_classification in ('technical', 'negligent', 'intentional', 'natural', 'undetermined')),
+  ignition_source text,
+  fuel_load text,
+  cause_reasoning text,
+  linked_incident_id uuid references public.incidents(id) on delete restrict,
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz,
+  closed_by uuid references auth.users(id),
+  closed_by_name text,
+  closed_at timestamptz
+);
+
+create table if not exists public.fire_investigation_people (
+  id uuid primary key,
+  investigation_id uuid not null references public.fire_investigations(id) on delete restrict,
+  person_name text not null,
+  phone text,
+  person_role text not null check (person_role in ('owner', 'resident', 'witness', 'injured', 'suspect', 'other')),
+  statement text,
+  contact_status text,
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz
+);
+
+create table if not exists public.fire_investigation_evidence (
+  id uuid primary key,
+  investigation_id uuid not null references public.fire_investigations(id) on delete restrict,
+  evidence_number text not null,
+  evidence_type text not null,
+  found_location text,
+  collected_at timestamptz,
+  collected_by text,
+  lab_status text not null default 'not_sent' check (lab_status in ('not_sent', 'sent', 'processing', 'completed')),
+  lab_number text,
+  result text,
+  chain_of_custody text,
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz,
+  unique (investigation_id, evidence_number)
+);
+
+create table if not exists public.fire_investigation_log (
+  id uuid primary key,
+  investigation_id uuid not null references public.fire_investigations(id) on delete restrict,
+  entry_at timestamptz not null,
+  entry_type text not null check (entry_type in ('investigation', 'interview', 'evidence', 'lab', 'handoff', 'cause', 'note')),
+  description text not null,
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now()
+);
+
 alter table public.bulletin_entries add column if not exists updated_by uuid references auth.users(id);
 alter table public.bulletin_entries add column if not exists updated_by_name text;
 alter table public.bulletin_entries add column if not exists updated_at timestamptz;
@@ -215,6 +300,11 @@ on public.deceased_records (chamber_number) where chamber_occupied;
 create unique index if not exists psychology_records_file_number_idx on public.psychology_records (lower(file_number));
 create index if not exists psychology_records_status_updated_idx on public.psychology_records (status, updated_at desc nulls last, created_at desc);
 create index if not exists psychology_sessions_record_date_idx on public.psychology_sessions (record_id, session_at desc);
+create unique index if not exists fire_investigations_case_number_idx on public.fire_investigations (lower(case_number));
+create index if not exists fire_investigations_status_date_idx on public.fire_investigations (status, incident_date desc);
+create index if not exists fire_people_investigation_idx on public.fire_investigation_people (investigation_id, created_at);
+create index if not exists fire_evidence_investigation_idx on public.fire_investigation_evidence (investigation_id, created_at);
+create index if not exists fire_log_investigation_date_idx on public.fire_investigation_log (investigation_id, entry_at desc);
 
 create or replace function public.log_patient_activity()
 returns trigger
@@ -448,6 +538,80 @@ begin
 end;
 $$;
 
+create or replace function public.protect_fire_investigation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  actor_name := coalesce(actor_name, 'Unbekannt');
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid(); new.created_by_name := actor_name; new.created_at := now();
+    new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
+    new.closed_by := null; new.closed_by_name := null; new.closed_at := null;
+    if new.status = 'closed' then raise exception 'Neue Ermittlungsakten können nicht abgeschlossen angelegt werden.'; end if;
+    return new;
+  end if;
+  if old.status = 'closed' then raise exception 'Abgeschlossene Ermittlungsakten sind schreibgeschützt.'; end if;
+  new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  new.updated_by := auth.uid(); new.updated_by_name := actor_name; new.updated_at := now();
+  if new.status = 'closed' then
+    new.closed_by := auth.uid(); new.closed_by_name := actor_name; new.closed_at := now();
+  else
+    new.closed_by := null; new.closed_by_name := null; new.closed_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_fire_investigation_child()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  if not exists (select 1 from public.fire_investigations where id = new.investigation_id and status <> 'closed') then
+    raise exception 'Einträge können nur in offenen Ermittlungsakten geändert werden.';
+  end if;
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  actor_name := coalesce(actor_name, 'Unbekannt');
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid(); new.created_by_name := actor_name; new.created_at := now();
+    new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
+    return new;
+  end if;
+  new.investigation_id := old.investigation_id;
+  new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  new.updated_by := auth.uid(); new.updated_by_name := actor_name; new.updated_at := now();
+  return new;
+end;
+$$;
+
+create or replace function public.protect_fire_investigation_log()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  if not exists (select 1 from public.fire_investigations where id = new.investigation_id and status <> 'closed') then
+    raise exception 'Verlaufseinträge können nur in offenen Ermittlungsakten angelegt werden.';
+  end if;
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  new.created_by := auth.uid(); new.created_by_name := coalesce(actor_name, 'Unbekannt'); new.created_at := now();
+  return new;
+end;
+$$;
+
 -- Bereinigt bestehende abgeschlossene Einträge, ohne deren Protokolldaten zu verändern.
 update public.deceased_records
 set chamber_occupied = false, chamber_number = null
@@ -491,6 +655,14 @@ begin
       end if;
       delete from public.psychology_sessions where record_id = p_entry_id;
       delete from public.psychology_records where id = p_entry_id and status = 'closed';
+    when 'fire_investigation' then
+      if not exists (select 1 from public.fire_investigations where id = p_entry_id and status = 'closed') then
+        raise exception 'Abgeschlossene Brandermittlungsakte nicht gefunden.';
+      end if;
+      delete from public.fire_investigation_log where investigation_id = p_entry_id;
+      delete from public.fire_investigation_evidence where investigation_id = p_entry_id;
+      delete from public.fire_investigation_people where investigation_id = p_entry_id;
+      delete from public.fire_investigations where id = p_entry_id and status = 'closed';
     else
       raise exception 'Unbekannter Historientyp.';
   end case;
@@ -553,6 +725,22 @@ drop trigger if exists psychology_sessions_protection_trigger on public.psycholo
 create trigger psychology_sessions_protection_trigger before insert or update on public.psychology_sessions
 for each row execute function public.protect_psychology_session();
 
+drop trigger if exists fire_investigations_protection_trigger on public.fire_investigations;
+create trigger fire_investigations_protection_trigger before insert or update on public.fire_investigations
+for each row execute function public.protect_fire_investigation();
+
+drop trigger if exists fire_people_protection_trigger on public.fire_investigation_people;
+create trigger fire_people_protection_trigger before insert or update on public.fire_investigation_people
+for each row execute function public.protect_fire_investigation_child();
+
+drop trigger if exists fire_evidence_protection_trigger on public.fire_investigation_evidence;
+create trigger fire_evidence_protection_trigger before insert or update on public.fire_investigation_evidence
+for each row execute function public.protect_fire_investigation_child();
+
+drop trigger if exists fire_log_protection_trigger on public.fire_investigation_log;
+create trigger fire_log_protection_trigger before insert on public.fire_investigation_log
+for each row execute function public.protect_fire_investigation_log();
+
 drop trigger if exists mci_members_last_manager_trigger on public.mci_members;
 create trigger mci_members_last_manager_trigger before update or delete on public.mci_members
 for each row execute function public.protect_last_user_manager();
@@ -564,6 +752,9 @@ revoke execute on function public.protect_lab_request() from public, anon, authe
 revoke execute on function public.protect_deceased_record() from public, anon, authenticated;
 revoke execute on function public.protect_psychology_record() from public, anon, authenticated;
 revoke execute on function public.protect_psychology_session() from public, anon, authenticated;
+revoke execute on function public.protect_fire_investigation() from public, anon, authenticated;
+revoke execute on function public.protect_fire_investigation_child() from public, anon, authenticated;
+revoke execute on function public.protect_fire_investigation_log() from public, anon, authenticated;
 revoke execute on function public.protect_last_user_manager() from public, anon, authenticated;
 revoke execute on function public.delete_history_entry(text, uuid) from public, anon, authenticated;
 grant execute on function public.delete_history_entry(text, uuid) to authenticated;
@@ -577,6 +768,10 @@ alter table public.lab_requests enable row level security;
 alter table public.deceased_records enable row level security;
 alter table public.psychology_records enable row level security;
 alter table public.psychology_sessions enable row level security;
+alter table public.fire_investigations enable row level security;
+alter table public.fire_investigation_people enable row level security;
+alter table public.fire_investigation_evidence enable row level security;
+alter table public.fire_investigation_log enable row level security;
 
 revoke all on public.mci_members from anon, authenticated;
 revoke all on public.incidents from anon, authenticated;
@@ -587,6 +782,10 @@ revoke all on public.lab_requests from anon, authenticated;
 revoke all on public.deceased_records from anon, authenticated;
 revoke all on public.psychology_records from anon, authenticated;
 revoke all on public.psychology_sessions from anon, authenticated;
+revoke all on public.fire_investigations from anon, authenticated;
+revoke all on public.fire_investigation_people from anon, authenticated;
+revoke all on public.fire_investigation_evidence from anon, authenticated;
+revoke all on public.fire_investigation_log from anon, authenticated;
 grant select on public.mci_members to authenticated;
 grant select, insert, update on public.incidents to authenticated;
 grant select, insert, update, delete on public.patients to authenticated;
@@ -596,6 +795,10 @@ grant select, insert, update on public.lab_requests to authenticated;
 grant select, insert, update on public.deceased_records to authenticated;
 grant select, insert, update on public.psychology_records to authenticated;
 grant select, insert, update on public.psychology_sessions to authenticated;
+grant select, insert, update on public.fire_investigations to authenticated;
+grant select, insert, update on public.fire_investigation_people to authenticated;
+grant select, insert, update on public.fire_investigation_evidence to authenticated;
+grant select, insert on public.fire_investigation_log to authenticated;
 
 drop policy if exists "Mitglied sieht eigene Freigabe" on public.mci_members;
 create policy "Mitglied sieht eigene Freigabe"
@@ -743,6 +946,71 @@ with check (
   and exists (select 1 from public.psychology_records r where r.id = record_id and r.status <> 'closed')
 );
 
+drop policy if exists "Fire Investigation liest Akten" on public.fire_investigations;
+create policy "Fire Investigation liest Akten" on public.fire_investigations for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation erstellt Akten" on public.fire_investigations;
+create policy "Fire Investigation erstellt Akten" on public.fire_investigations for insert to authenticated
+with check (created_by = auth.uid() and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation bearbeitet Akten" on public.fire_investigations;
+create policy "Fire Investigation bearbeitet Akten" on public.fire_investigations for update to authenticated
+using (status <> 'closed' and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation))
+with check (updated_by = auth.uid() and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation liest Personen" on public.fire_investigation_people;
+create policy "Fire Investigation liest Personen" on public.fire_investigation_people for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation erstellt Personen" on public.fire_investigation_people;
+create policy "Fire Investigation erstellt Personen" on public.fire_investigation_people for insert to authenticated
+with check (
+  created_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation)
+  and exists (select 1 from public.fire_investigations f where f.id = investigation_id and f.status <> 'closed')
+);
+
+drop policy if exists "Fire Investigation bearbeitet Personen" on public.fire_investigation_people;
+create policy "Fire Investigation bearbeitet Personen" on public.fire_investigation_people for update to authenticated
+using (
+  exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation)
+  and exists (select 1 from public.fire_investigations f where f.id = investigation_id and f.status <> 'closed')
+)
+with check (updated_by = auth.uid() and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation liest Beweismittel" on public.fire_investigation_evidence;
+create policy "Fire Investigation liest Beweismittel" on public.fire_investigation_evidence for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation erstellt Beweismittel" on public.fire_investigation_evidence;
+create policy "Fire Investigation erstellt Beweismittel" on public.fire_investigation_evidence for insert to authenticated
+with check (
+  created_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation)
+  and exists (select 1 from public.fire_investigations f where f.id = investigation_id and f.status <> 'closed')
+);
+
+drop policy if exists "Fire Investigation bearbeitet Beweismittel" on public.fire_investigation_evidence;
+create policy "Fire Investigation bearbeitet Beweismittel" on public.fire_investigation_evidence for update to authenticated
+using (
+  exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation)
+  and exists (select 1 from public.fire_investigations f where f.id = investigation_id and f.status <> 'closed')
+)
+with check (updated_by = auth.uid() and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation liest Verlauf" on public.fire_investigation_log;
+create policy "Fire Investigation liest Verlauf" on public.fire_investigation_log for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation));
+
+drop policy if exists "Fire Investigation erstellt Verlauf" on public.fire_investigation_log;
+create policy "Fire Investigation erstellt Verlauf" on public.fire_investigation_log for insert to authenticated
+with check (
+  created_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_fire_investigation)
+  and exists (select 1 from public.fire_investigations f where f.id = investigation_id and f.status <> 'closed')
+);
+
 drop policy if exists "Mitglieder lesen MCIs" on public.incidents;
 create policy "Mitglieder lesen MCIs"
 on public.incidents for select to authenticated
@@ -852,6 +1120,18 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'psychology_sessions'
   ) then
     alter publication supabase_realtime add table public.psychology_sessions;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'fire_investigations') then
+    alter publication supabase_realtime add table public.fire_investigations;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'fire_investigation_people') then
+    alter publication supabase_realtime add table public.fire_investigation_people;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'fire_investigation_evidence') then
+    alter publication supabase_realtime add table public.fire_investigation_evidence;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'fire_investigation_log') then
+    alter publication supabase_realtime add table public.fire_investigation_log;
   end if;
 end $$;
 

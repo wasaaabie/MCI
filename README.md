@@ -24,6 +24,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Berechtigungsgeschützte Benutzerverwaltung für Konten und Sonderrechte
 - Eigenes Passwort ändern und Passwörter durch die Benutzerverwaltung neu setzen
 - Geschützte Psychologie-Akten mit behandelndem Personal und chronologischem Sitzungsverlauf
+- Fire-Prevention-and-Investigation-Akten mit Personen, Brandursache, Beweismitteln und Ermittlungsverlauf
 
 ## 1. Datenbank einrichten
 
@@ -119,9 +120,15 @@ Das Modul **Psychologie** ist nur für Benutzer mit der Berechtigung `can_access
 
 Die vorhandene Berechtigung **Historie endgültig löschen** gilt auch für abgeschlossene Psychologie-Akten. Beim Löschen werden die Akte und sämtliche enthaltenen Sitzungen unwiderruflich entfernt. Aktive oder pausierte Akten können nicht endgültig gelöscht werden.
 
+## Fire Prevention and Investigation
+
+Das geschützte Modul führt Brandermittlungsakten mit Aktennummer, Einsatzdaten, Objekt- und Brandstellenbeschreibung, leitendem Ermittler sowie klassifizierter Brandursache. Pro Akte können beliebig viele betroffene Personen und Proben beziehungsweise Beweismittel erfasst werden. Beweismittel besitzen Laborstatus, Probenergebnis, Labornummer und eine dokumentierbare Chain of Custody. Untersuchungsschritte, Befragungen, Laborergebnisse und Übergaben erscheinen chronologisch im unveränderlichen Aktenverlauf.
+
+Der Zugriff benötigt `can_access_fire_investigation`. Abgeschlossene Akten und alle untergeordneten Daten sind schreibgeschützt. Die vorhandene Berechtigung **Historie endgültig löschen** entfernt eine abgeschlossene Brandermittlungsakte einschließlich Personen, Beweismitteln und Verlauf unwiderruflich.
+
 ## Weitere Benutzer freigeben
 
-Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, Passwort, Psychologie-Zugriff, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. Jeder angemeldete Benutzer kann außerdem über **Passwort ändern** im Kopfbereich sein eigenes Passwort setzen. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
+Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, Passwort, Psychologie-Zugriff, Fire-Investigation-Zugriff, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. Jeder angemeldete Benutzer kann außerdem über **Passwort ändern** im Kopfbereich sein eigenes Passwort setzen. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
 
 ### Recht zum Löschen von Historien
 
