@@ -32,6 +32,8 @@ let reloadTimer = null;
 let migrationChecked = false;
 let toastTimer;
 let canDeleteHistory = false;
+let canManageUsers = false;
+let managedUsers = [];
 
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#patientDialog");
@@ -92,7 +94,7 @@ async function applySession(session) {
 
   const { data: membership, error } = await db
     .from("mci_members")
-    .select("display_name, can_delete_history")
+    .select("display_name, can_delete_history, can_manage_users")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -106,6 +108,8 @@ async function applySession(session) {
   activeUserId = user.id;
   currentUser = user;
   canDeleteHistory = Boolean(membership.can_delete_history);
+  canManageUsers = Boolean(membership.can_manage_users);
+  $("#navUsersBtn").classList.toggle("hidden", !canManageUsers);
   $("#userEmail").textContent = membership.display_name || user.email || "Einsatzkonto";
   $("#authGate").classList.add("hidden");
   $("#appHeader").classList.remove("hidden");
@@ -118,12 +122,16 @@ async function applySession(session) {
 
 function showLogin() {
   canDeleteHistory = false;
+  canManageUsers = false;
+  managedUsers = [];
   bulletinEntries = [];
   labEntries = [];
   deceasedRecords = [];
   $("#authGate").classList.remove("hidden");
   $("#appHeader").classList.add("hidden");
   $("#appNav").classList.add("hidden");
+  $("#navUsersBtn").classList.add("hidden");
+  $("#userManagementMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
@@ -265,6 +273,7 @@ function showIncidentOverview() {
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
+  $("#userManagementMain").classList.add("hidden");
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
   $("#closeIncidentBtn").classList.add("hidden");
@@ -287,6 +296,7 @@ async function openIncident(id) {
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
+  $("#userManagementMain").classList.add("hidden");
   $("#appMain").classList.remove("hidden");
   $("#pageTitle").textContent = incident.title;
   $("#incidentTitle").textContent = incident.title;
@@ -320,6 +330,7 @@ async function showBulletinBoard() {
   $("#appMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
+  $("#userManagementMain").classList.add("hidden");
   $("#bulletinMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
@@ -336,10 +347,112 @@ function setActiveNav(section) {
   $("#navBulletinBtn").classList.toggle("active", section === "bulletin");
   $("#navLabBtn").classList.toggle("active", section === "lab");
   $("#navDeceasedBtn").classList.toggle("active", section === "deceased");
+  $("#navUsersBtn").classList.toggle("active", section === "users");
   $("#navIncidentsBtn").setAttribute("aria-current", section === "incidents" ? "page" : "false");
   $("#navBulletinBtn").setAttribute("aria-current", section === "bulletin" ? "page" : "false");
   $("#navLabBtn").setAttribute("aria-current", section === "lab" ? "page" : "false");
   $("#navDeceasedBtn").setAttribute("aria-current", section === "deceased" ? "page" : "false");
+  $("#navUsersBtn").setAttribute("aria-current", section === "users" ? "page" : "false");
+}
+
+async function callUserManagement(action, payload = {}) {
+  const { data, error } = await db.functions.invoke("manage-users", { body: { action, ...payload } });
+  if (error) {
+    let message = data?.error || error.message || "Die Benutzerverwaltung ist nicht erreichbar.";
+    try {
+      const details = await error.context?.clone().json();
+      if (details?.error) message = details.error;
+    } catch (_) {
+      // Netzwerk- und CORS-Fehler besitzen nicht immer einen lesbaren Response-Body.
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+async function showUserManagement() {
+  if (!canManageUsers) return;
+  currentIncident = null;
+  patients = [];
+  activities = [];
+  $("#pageTitle").textContent = "Benutzerverwaltung";
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain"].forEach(selector => $(selector).classList.add("hidden"));
+  $("#userManagementMain").classList.remove("hidden");
+  ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
+  setActiveNav("users");
+  await loadManagedUsers();
+}
+
+async function loadManagedUsers() {
+  const body = $("#userManagementBody");
+  const errorBox = $("#userManagementError");
+  body.innerHTML = `<tr><td class="table-empty" colspan="5">Benutzer werden geladen …</td></tr>`;
+  errorBox.classList.add("hidden");
+  try {
+    const data = await callUserManagement("list");
+    managedUsers = data.users || [];
+    renderManagedUsers();
+  } catch (error) {
+    body.innerHTML = `<tr><td class="table-empty" colspan="5">Benutzer konnten nicht geladen werden.</td></tr>`;
+    errorBox.textContent = error.message;
+    errorBox.classList.remove("hidden");
+  }
+}
+
+function renderManagedUsers() {
+  $("#userCount").textContent = managedUsers.length;
+  $("#userManagementBody").innerHTML = managedUsers.length
+    ? managedUsers.map(user => {
+      const isSelf = user.id === currentUser?.id;
+      return `<tr data-managed-user="${user.id}">
+        <td><input class="table-text-input" data-user-name value="${escapeHtml(user.display_name || "")}" maxlength="80" aria-label="Anzeigename von ${escapeHtml(user.email)}"></td>
+        <td><strong>${escapeHtml(user.email)}</strong></td>
+        <td class="bulletin-date">${formatDate(user.last_sign_in_at)}</td>
+        <td><div class="user-row-permissions"><label class="check"><input data-user-delete-history type="checkbox" ${user.can_delete_history ? "checked" : ""}><span>Historie löschen</span></label><label class="check"><input data-user-manage-users type="checkbox" ${user.can_manage_users ? "checked" : ""} ${isSelf ? "disabled" : ""}><span>Benutzer verwalten</span></label></div></td>
+        <td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-save-user="${user.id}">Speichern</button><button class="button-link-danger" type="button" data-revoke-user="${user.id}" ${isSelf ? "disabled title=\"Der eigene Zugriff kann nicht entzogen werden\"" : ""}>Zugriff entziehen</button></div></td>
+      </tr>`;
+    }).join("")
+    : `<tr><td class="table-empty" colspan="5">Keine freigegebenen Benutzer vorhanden.</td></tr>`;
+  document.querySelectorAll("[data-save-user]").forEach(button => button.addEventListener("click", () => saveManagedUser(button.dataset.saveUser)));
+  document.querySelectorAll("[data-revoke-user]").forEach(button => button.addEventListener("click", () => revokeManagedUser(button.dataset.revokeUser)));
+}
+
+async function saveManagedUser(userId) {
+  const row = document.querySelector(`[data-managed-user="${userId}"]`);
+  if (!row) return;
+  const displayName = row.querySelector("[data-user-name]").value.trim();
+  if (!displayName) {
+    showToast("Bitte einen Anzeigenamen eintragen.");
+    return;
+  }
+  const button = row.querySelector("[data-save-user]");
+  button.disabled = true;
+  try {
+    await callUserManagement("update", {
+      userId,
+      displayName,
+      canDeleteHistory: row.querySelector("[data-user-delete-history]").checked,
+      canManageUsers: row.querySelector("[data-user-manage-users]").checked
+    });
+    await loadManagedUsers();
+    showToast("Benutzer und Berechtigungen wurden gespeichert.");
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
+}
+
+async function revokeManagedUser(userId) {
+  const user = managedUsers.find(item => item.id === userId);
+  if (!user || !confirm(`Board-Zugriff für „${user.display_name || user.email}“ wirklich entziehen?`)) return;
+  try {
+    await callUserManagement("revoke", { userId });
+    await loadManagedUsers();
+    showToast("Der Board-Zugriff wurde entzogen.");
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 function openBulletinDialog(id = "") {
@@ -410,6 +523,7 @@ async function showLabRequests() {
   $("#appMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
+  $("#userManagementMain").classList.add("hidden");
   $("#labMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
@@ -490,6 +604,7 @@ async function showDeceasedOverview() {
   $("#appMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
+  $("#userManagementMain").classList.add("hidden");
   $("#deceasedMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
   $("#newPatientBtn").classList.add("hidden");
@@ -1122,6 +1237,32 @@ $("#loginForm").addEventListener("submit", async event => {
   if (error) setAuthError("E-Mail-Adresse oder Passwort ist nicht korrekt.");
 });
 
+$("#createUserForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const createForm = event.currentTarget;
+  if (!createForm.reportValidity() || !canManageUsers) return;
+  const button = $("#createUserBtn");
+  button.disabled = true;
+  button.textContent = "Konto wird angelegt …";
+  try {
+    await callUserManagement("create", {
+      email: $("#newUserEmail").value.trim(),
+      password: $("#newUserPassword").value,
+      displayName: $("#newUserDisplayName").value.trim(),
+      canDeleteHistory: $("#newUserCanDeleteHistory").checked,
+      canManageUsers: $("#newUserCanManageUsers").checked
+    });
+    createForm.reset();
+    await loadManagedUsers();
+    showToast("Das Benutzerkonto wurde angelegt.");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Konto anlegen";
+  }
+});
+
 $("#logoutBtn").addEventListener("click", async () => {
   if (db) await db.auth.signOut();
 });
@@ -1131,6 +1272,7 @@ $("#navIncidentsBtn").addEventListener("click", showIncidentOverview);
 $("#navBulletinBtn").addEventListener("click", showBulletinBoard);
 $("#navLabBtn").addEventListener("click", showLabRequests);
 $("#navDeceasedBtn").addEventListener("click", showDeceasedOverview);
+$("#navUsersBtn").addEventListener("click", showUserManagement);
 $("#navCollapseBtn").addEventListener("click", () => setNavCollapsed(!$("#appNav").classList.contains("collapsed")));
 $("#newBulletinBtn").addEventListener("click", () => openBulletinDialog());
 $("#newBulletinMainBtn").addEventListener("click", () => openBulletinDialog());

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=25">
+  <link rel="stylesheet" href="styles.css?v=26">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -53,8 +53,34 @@
     <button id="navBulletinBtn" class="nav-item" type="button" title="Schwarzes Brett"><span class="nav-icon">B</span><span class="nav-copy"><strong>Schwarzes Brett</strong><small>Anliegen &amp; Vorfälle</small></span></button>
     <button id="navLabBtn" class="nav-item" type="button" title="Labor Requests"><span class="nav-icon">L</span><span class="nav-copy"><strong>Labor Requests</strong><small>Proben &amp; Hinweise</small></span></button>
     <button id="navDeceasedBtn" class="nav-item" type="button" title="Totenübersicht"><span class="nav-icon deceased-nav-icon">†</span><span class="nav-copy"><strong>Totenübersicht</strong><small>Kühlfächer &amp; Dokumentation</small></span></button>
+    <button id="navUsersBtn" class="nav-item hidden" type="button" title="Benutzerverwaltung"><span class="nav-icon">U</span><span class="nav-copy"><strong>Benutzerverwaltung</strong><small>Konten &amp; Berechtigungen</small></span></button>
     <div class="nav-future"><span>Weiteres Modul</span><small>Navigation ist vorbereitet</small></div>
   </nav>
+
+  <main id="userManagementMain" class="hidden">
+    <section class="incident-intro">
+      <div><p class="eyebrow">Administration</p><h2>Benutzerverwaltung</h2><p>Konten anlegen und Zugriffsrechte für das MCI Board verwalten.</p></div>
+    </section>
+    <section class="user-create-section">
+      <div class="history-heading"><div><p class="eyebrow">Neues Konto</p><h2>Benutzer anlegen</h2></div></div>
+      <form id="createUserForm" class="user-create-form">
+        <label class="field"><span>Anzeigename *</span><input id="newUserDisplayName" required autocomplete="off" maxlength="80" placeholder="Vor- und Nachname"></label>
+        <label class="field"><span>E-Mail-Adresse *</span><input id="newUserEmail" type="email" required autocomplete="off" placeholder="name@organisation.de"></label>
+        <label class="field"><span>Startpasswort *</span><input id="newUserPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Mindestens 8 Zeichen"></label>
+        <div class="user-permission-fields">
+          <label class="check"><input id="newUserCanDeleteHistory" type="checkbox"><span>Historie endgültig löschen</span></label>
+          <label class="check"><input id="newUserCanManageUsers" type="checkbox"><span>Benutzer verwalten</span></label>
+        </div>
+        <button id="createUserBtn" class="button button-primary" type="submit">Konto anlegen</button>
+      </form>
+      <p class="user-security-note">Das Startpasswort wird nur zur Kontoerstellung übertragen und nicht in der Anwendung gespeichert.</p>
+    </section>
+    <section class="board-section user-list-section">
+      <div class="history-heading"><div><p class="eyebrow">Zugriff</p><h2>Freigegebene Benutzer</h2></div><span id="userCount" class="history-count">0</span></div>
+      <div id="userManagementError" class="config-warning hidden" role="alert"></div>
+      <div class="table-wrap"><table class="bulletin-table user-table"><thead><tr><th>Benutzer</th><th>E-Mail</th><th>Letzte Anmeldung</th><th>Berechtigungen</th><th></th></tr></thead><tbody id="userManagementBody"></tbody></table></div>
+    </section>
+  </main>
 
   <main id="deceasedMain" class="hidden">
     <section class="incident-intro">
@@ -337,6 +363,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>

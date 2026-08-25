@@ -6,10 +6,21 @@ create table if not exists public.mci_members (
   user_id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
   can_delete_history boolean not null default false,
+  can_manage_users boolean not null default false,
   created_at timestamptz not null default now()
 );
 
 alter table public.mci_members add column if not exists can_delete_history boolean not null default false;
+alter table public.mci_members add column if not exists can_manage_users boolean not null default false;
+
+-- Bei der erstmaligen Migration erhält das älteste freigegebene Konto die Benutzerverwaltung.
+-- So bleibt die Funktion nach dem Update erreichbar, ohne pauschal alle Mitglieder hochzustufen.
+update public.mci_members
+set can_manage_users = true
+where user_id = (
+  select user_id from public.mci_members order by created_at, user_id limit 1
+)
+and not exists (select 1 from public.mci_members where can_manage_users);
 
 create table if not exists public.incidents (
   id uuid primary key,
@@ -374,6 +385,34 @@ begin
 end;
 $$;
 
+-- Verhindert auch bei parallelen Admin-Anfragen, dass die letzte Benutzerverwaltung entfernt wird.
+create or replace function public.protect_last_user_manager()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  removes_permission boolean := false;
+begin
+  if old.can_manage_users then
+    if tg_op = 'DELETE' then removes_permission := true;
+    elsif not new.can_manage_users then removes_permission := true;
+    end if;
+  end if;
+  if removes_permission then
+    perform pg_advisory_xact_lock(1296255305);
+    if not exists (
+      select 1 from public.mci_members
+      where user_id <> old.user_id and can_manage_users
+    ) then
+      raise exception 'Mindestens eine Person muss Benutzer verwalten dürfen.' using errcode = '23514';
+    end if;
+  end if;
+  if tg_op = 'DELETE' then return old; else return new; end if;
+end;
+$$;
+
 drop trigger if exists patients_activity_trigger on public.patients;
 create trigger patients_activity_trigger after insert or update or delete on public.patients
 for each row execute function public.log_patient_activity();
@@ -394,11 +433,16 @@ drop trigger if exists deceased_records_protection_trigger on public.deceased_re
 create trigger deceased_records_protection_trigger before insert or update on public.deceased_records
 for each row execute function public.protect_deceased_record();
 
+drop trigger if exists mci_members_last_manager_trigger on public.mci_members;
+create trigger mci_members_last_manager_trigger before update or delete on public.mci_members
+for each row execute function public.protect_last_user_manager();
+
 revoke execute on function public.log_patient_activity() from public, anon, authenticated;
 revoke execute on function public.log_incident_activity() from public, anon, authenticated;
 revoke execute on function public.protect_bulletin_entry() from public, anon, authenticated;
 revoke execute on function public.protect_lab_request() from public, anon, authenticated;
 revoke execute on function public.protect_deceased_record() from public, anon, authenticated;
+revoke execute on function public.protect_last_user_manager() from public, anon, authenticated;
 revoke execute on function public.delete_history_entry(text, uuid) from public, anon, authenticated;
 grant execute on function public.delete_history_entry(text, uuid) to authenticated;
 
@@ -619,4 +663,7 @@ end $$;
 -- on conflict (user_id) do update set display_name = excluded.display_name;
 -- Recht zum endgültigen Löschen sämtlicher Historien vergeben:
 -- update public.mci_members set can_delete_history = true
+-- where user_id = (select id from auth.users where email = 'name@example.com');
+-- Recht zur Benutzerverwaltung vergeben (mindestens eine Person muss es besitzen):
+-- update public.mci_members set can_manage_users = true
 -- where user_id = (select id from auth.users where email = 'name@example.com');

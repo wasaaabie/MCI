@@ -21,6 +21,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Farbliche Übersicht für transportbereite, unterwegs befindliche und angekommene Patienten
 - Suche und Triagefilter
 - Geschützter Datenzugriff durch Row Level Security
+- Berechtigungsgeschützte Benutzerverwaltung für Konten und Sonderrechte
 
 ## 1. Datenbank einrichten
 
@@ -43,14 +44,27 @@ Nach einem Update den aktuellen Inhalt von `supabase.sql` erneut vollständig im
 3. Danach im SQL Editor ausführen und die Werte ersetzen:
 
 ```sql
-insert into public.mci_members (user_id, display_name)
-select id, 'Projektleitung' from auth.users where email = 'deine@email.de'
-on conflict (user_id) do update set display_name = excluded.display_name;
+insert into public.mci_members (user_id, display_name, can_manage_users)
+select id, 'Projektleitung', true from auth.users where email = 'deine@email.de'
+on conflict (user_id) do update
+set display_name = excluded.display_name, can_manage_users = true;
 ```
 
-Ein Auth-Benutzer erhält erst durch einen Eintrag in `mci_members` Zugriff auf Patientendaten.
+Ein Auth-Benutzer erhält erst durch einen Eintrag in `mci_members` Zugriff auf Patientendaten. `can_manage_users` schaltet das Administrationsmodul frei.
 
-## 3. Website mit Supabase verbinden
+## 3. Benutzerverwaltung bereitstellen
+
+Die sensiblen Kontoaktionen laufen in der Edge Function `manage-users`; der `service_role`-Schlüssel gelangt dadurch nie in den Browser. Mit installierter [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) im Projektordner ausführen:
+
+```powershell
+supabase login
+supabase link --project-ref DEINE-PROJEKT-ID
+supabase functions deploy manage-users
+```
+
+`SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY` werden einer bereitgestellten Supabase Edge Function automatisch zur Verfügung gestellt. Danach sehen ausschließlich Mitglieder mit `can_manage_users = true` den Menüpunkt **Benutzerverwaltung**.
+
+## 4. Website mit Supabase verbinden
 
 Im Supabase-Dashboard über **Connect** oder **Project Settings → API** die Projekt-URL und den **Publishable Key** kopieren. Danach `config.js` bearbeiten:
 
@@ -63,7 +77,7 @@ window.MCI_CONFIG = {
 
 Der Publishable Key darf Bestandteil einer Browser-App sein. Niemals den `service_role`-Key in `config.js`, GitHub oder anderen öffentlichen Dateien speichern.
 
-## 4. Auf GitHub Pages veröffentlichen
+## 5. Auf GitHub Pages veröffentlichen
 
 ```powershell
 git add .
@@ -99,7 +113,7 @@ Die Totenübersicht dokumentiert Patientenname, Todesdatum, vermuteten Todesumst
 
 ## Weitere Benutzer freigeben
 
-Für jede Person zuerst unter **Authentication → Users** ein Konto erstellen. Danach die oben gezeigte SQL-Abfrage mit deren E-Mail und Anzeigenamen ausführen.
+Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
 
 ### Recht zum Löschen von Historien
 

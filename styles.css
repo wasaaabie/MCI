@@ -160,3 +160,19 @@ dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 34
   :root { color-scheme: light; }
   body { color: #111; background: #fff; }.app-header { position: static; padding: 0 0 14px; background: none; border-bottom: 2px solid #111; }.eyebrow { color: #444; }.header-actions, .toolbar, .edit-button, .empty-state, dialog, .toast { display: none !important; } main { max-width: none; padding: 18px 0; }.summary { gap: 6px; }.summary-card, .patient-card { color: #111; background: #fff; border-color: #bbb; break-inside: avoid; }.summary-card span, .patient-no, .detail span, .updated-at { color: #555; }.patient-grid { grid-template-columns: repeat(2, 1fr); }.status-chip { color: #111; background: #eee; }
 }
+
+.user-create-section, .user-list-section { margin-bottom: 22px; padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
+.user-create-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end; }
+.user-permission-fields { display: flex; grid-column: 1 / -1; gap: 12px; flex-wrap: wrap; }
+.user-security-note { margin: 12px 0 0; color: var(--muted); font-size: .75rem; }
+.user-row-permissions { display: grid; gap: 7px; min-width: 185px; }
+.user-row-permissions .check { min-height: 34px; padding: 7px 9px; }
+.table-text-input { width: min(220px, 100%); min-width: 150px; padding: 9px 10px; color: var(--text); background: var(--surface-strong); border: 1px solid var(--border); border-radius: 8px; font: inherit; }
+.table-text-input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); border-color: var(--accent); }
+.button-link-danger { padding: 7px 4px; color: #ff9a8f; background: transparent; border: 0; font: inherit; font-size: .75rem; font-weight: 800; cursor: pointer; }
+.button-link-danger:hover:not(:disabled) { text-decoration: underline; }
+.button-link-danger:disabled { color: var(--muted); cursor: not-allowed; opacity: .55; }
+#userManagementError { margin-bottom: 14px; }
+
+@media (max-width: 900px) { .user-create-form { grid-template-columns: 1fr; }.user-permission-fields { grid-column: auto; } }
+@media (max-width: 680px) { .user-create-section, .user-list-section { padding: 16px; }.user-create-form { gap: 11px; } }
