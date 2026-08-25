@@ -1402,6 +1402,7 @@ function render() {
   $("#patientGrid").classList.toggle("hidden", patients.length === 0);
 
   $("#patientGrid").innerHTML = visible.length ? visible.map(patientCard).join("") : `<div class="no-results">Keine passenden Patienten gefunden.</div>`;
+  document.querySelectorAll("[data-copy-patient]").forEach(button => button.addEventListener("click", () => copyPatientAsText(button.dataset.copyPatient)));
   document.querySelectorAll("[data-edit-id]").forEach(button => button.addEventListener("click", () => openDialog(button.dataset.editId)));
 }
 
@@ -1427,8 +1428,95 @@ function patientCard(patient) {
       <div class="detail"><span>Sichtung</span><strong>${formatDate(patient.triageTime)}</strong></div>
     </div>
     <div class="status-row">${statuses.length ? statuses.map(status => `<span class="status-chip ${status.style}">${status.label}</span>`).join("") : `<span class="status-chip">Status offen</span>`}</div>
-    <div class="card-footer"><span class="updated-at">Aktualisiert ${formatDate(patient.updatedAt)}</span><button class="edit-button" type="button" data-edit-id="${escapeHtml(patient.id)}">${currentIncident?.status === "closed" ? "Ansehen" : "Öffnen"}</button></div>
+    <div class="card-footer"><span class="updated-at">Aktualisiert ${formatDate(patient.updatedAt)}</span><div class="patient-card-actions"><button class="edit-button" type="button" data-copy-patient="${escapeHtml(patient.id)}">Als Text kopieren</button><button class="edit-button" type="button" data-edit-id="${escapeHtml(patient.id)}">${currentIncident?.status === "closed" ? "Ansehen" : "Öffnen"}</button></div></div>
   </article>`;
+}
+
+function patientAsText(patient) {
+  const value = input => String(input ?? "").trim() || "–";
+  const yesNo = input => input ? "Ja" : "Nein";
+  const lines = [
+    "MCI-PATIENTENAKTE",
+    "==================",
+    `MCI: ${value(currentIncident?.title)}`,
+    `Einsatzort: ${value(currentIncident?.location)}`,
+    `Scene Lead: ${value(currentIncident?.scene_lead)}`,
+    `Einsatzbeginn: ${formatDate(currentIncident?.started_at)}`,
+    "",
+    "PERSONENDATEN",
+    `Patientennummer: ${value(patient.patientNumber)}`,
+    `Name: ${value(patient.name)}`,
+    `Geschlecht: ${value(patient.gender)}`,
+    `Alter / Geburtsdatum: ${value(patient.age)}`,
+    `Personenbeschreibung: ${value(patient.description)}`,
+    "",
+    "SICHTUNG UND BEHANDLUNG",
+    `Triage: ${value(triageLabels[patient.triage || "unassigned"])}`,
+    `Sichtungszeit: ${formatDate(patient.triageTime)}`,
+    `Verletzungen: ${value(patient.injuries)}`,
+    `Medikation / Maßnahmen: ${value(patient.medication)}`,
+    `Vor Ort behandelt: ${yesNo(patient.treatedOnSite)}`,
+    `Ausweiskontrolle vor Ort: ${yesNo(patient.idCheckCode7)}`,
+    `Behandelnde Einheit vor Ort: ${value(patient.unitOnSite)}`,
+    "",
+    "TRANSPORT UND KLINIK",
+    `Transportbereit: ${yesNo(patient.readyForTransport)}`,
+    `Abtransportiert: ${yesNo(patient.transported)}`,
+    `Zielkrankenhaus: ${value(patient.destinationHospital)}`,
+    `Eingeliefert: ${yesNo(patient.admitted)}`,
+    `Behandelnder Mediziner: ${value(patient.physician)}`,
+    `Behandlungsplatz / Übergabe an: ${value(patient.treatmentArea)}`,
+    `OP: ${yesNo(patient.surgery)}`,
+    `Behandelt: ${yesNo(patient.treatedHospital)}`,
+    `Ausweiskontrolle im Krankenhaus: ${yesNo(patient.idCheckHospital)}`,
+    `Entlassen: ${yesNo(patient.discharged)}`,
+    `Kliniknotizen: ${value(patient.hospitalNotes)}`,
+    "",
+    "WEITERE NOTIZEN",
+    value(patient.notes),
+    "",
+    "SICHTUNGSVERLAUF"
+  ];
+  const history = Array.isArray(patient.triageHistory) ? patient.triageHistory : [];
+  if (history.length) {
+    history.forEach(entry => lines.push(`${formatDate(entry.at)}: ${value(triageLabels[entry.from || "unassigned"])} → ${value(triageLabels[entry.to || "unassigned"])}`));
+  } else {
+    lines.push("Keine Änderungen dokumentiert.");
+  }
+  lines.push("", `Angelegt: ${formatDate(patient.createdAt)}`, `Zuletzt aktualisiert: ${formatDate(patient.updatedAt)}`);
+  return lines.join("\n");
+}
+
+async function copyPatientAsText(id) {
+  const patient = patients.find(item => item.id === id);
+  if (!patient) return showToast("Patientenakte wurde nicht gefunden.");
+  const text = patientAsText(patient);
+  const copyWithFallback = () => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    if (!copied) throw new Error("copy failed");
+  };
+  try {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (error) {
+        copyWithFallback();
+      }
+    } else {
+      copyWithFallback();
+    }
+    showToast(`Akte von ${patient.name || patient.patientNumber || "Patient"} wurde als Text kopiert.`);
+  } catch (error) {
+    showToast("Kopieren nicht möglich. Bitte Browser-Berechtigung prüfen.");
+  }
 }
 
 function openDialog(id = "") {

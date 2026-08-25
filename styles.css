@@ -126,7 +126,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .status-row { min-height: 24px; display: flex; flex-wrap: wrap; gap: 6px; }.status-chip { padding: 4px 7px; color: #b9c6d6; background: #202d3e; border-radius: 5px; font-size: .69rem; font-weight: 700; }
 .status-chip.ready { color: #061a34; background: var(--ready); }
 .status-chip.underway { color: #231805; background: var(--underway); }.status-chip.arrived { color: #041d1a; background: var(--arrived); }
-.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; }.updated-at { color: var(--muted); font-size: .7rem; }.edit-button { padding: 7px 10px; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 7px; font-weight: 750; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 18px; }.updated-at { color: var(--muted); font-size: .7rem; }.patient-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }.edit-button { padding: 7px 10px; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 7px; font-weight: 750; }
 .no-results { grid-column: 1 / -1; padding: 56px; color: var(--muted); text-align: center; }
 
 dialog { width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 28px 90px rgba(0,0,0,.65); }
