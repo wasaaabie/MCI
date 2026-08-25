@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -161,6 +161,7 @@
     </section>
     <section class="board-section user-list-section">
       <div class="history-heading"><div><p class="eyebrow">Zugriff</p><h2>Freigegebene Benutzer</h2></div><span id="userCount" class="history-count">0</span></div>
+      <div class="toolbar user-search-toolbar"><label class="search-field"><span class="sr-only">Benutzer suchen</span><input id="userSearch" type="search" autocomplete="off" placeholder="Nach Name oder E-Mail suchen …"></label></div>
       <div id="userManagementError" class="config-warning hidden" role="alert"></div>
       <div class="table-wrap"><table class="bulletin-table user-table"><thead><tr><th>Benutzer</th><th>E-Mail</th><th>Letzte Anmeldung</th><th>Berechtigungen</th><th></th></tr></thead><tbody id="userManagementBody"></tbody></table></div>
     </section>
@@ -466,6 +467,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

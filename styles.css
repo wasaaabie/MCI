@@ -173,6 +173,7 @@ dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 34
 .button-link-danger:hover:not(:disabled) { text-decoration: underline; }
 .button-link-danger:disabled { color: var(--muted); cursor: not-allowed; opacity: .55; }
 #userManagementError { margin-bottom: 14px; }
+.user-search-toolbar { margin: 0 0 14px; padding: 0; background: transparent; border: 0; }
 .password-dialog { width: min(620px, calc(100% - 24px)); }
 .password-dialog-text { margin: 0 0 18px; color: var(--muted); line-height: 1.5; }
 .psychology-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }

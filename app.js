@@ -438,9 +438,11 @@ async function loadManagedUsers() {
 }
 
 function renderManagedUsers() {
-  $("#userCount").textContent = managedUsers.length;
-  $("#userManagementBody").innerHTML = managedUsers.length
-    ? managedUsers.map(user => {
+  const search = $("#userSearch").value.trim().toLowerCase();
+  const visibleUsers = managedUsers.filter(user => !search || `${user.display_name || ""} ${user.email || ""}`.toLowerCase().includes(search));
+  $("#userCount").textContent = search ? `${visibleUsers.length} / ${managedUsers.length}` : managedUsers.length;
+  $("#userManagementBody").innerHTML = visibleUsers.length
+    ? visibleUsers.map(user => {
       const isSelf = user.id === currentUser?.id;
       return `<tr data-managed-user="${user.id}">
         <td><input class="table-text-input" data-user-name value="${escapeHtml(user.display_name || "")}" maxlength="80" aria-label="Anzeigename von ${escapeHtml(user.email)}"></td>
@@ -450,7 +452,7 @@ function renderManagedUsers() {
         <td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-save-user="${user.id}">Speichern</button><button class="bulletin-edit-button" type="button" data-reset-password="${user.id}">Passwort setzen</button><button class="button-link-danger" type="button" data-revoke-user="${user.id}" ${isSelf ? "disabled title=\"Der eigene Zugriff kann nicht entzogen werden\"" : ""}>Zugriff entziehen</button></div></td>
       </tr>`;
     }).join("")
-    : `<tr><td class="table-empty" colspan="5">Keine freigegebenen Benutzer vorhanden.</td></tr>`;
+    : `<tr><td class="table-empty" colspan="5">${search ? "Keine passenden Benutzer gefunden." : "Keine freigegebenen Benutzer vorhanden."}</td></tr>`;
   document.querySelectorAll("[data-save-user]").forEach(button => button.addEventListener("click", () => saveManagedUser(button.dataset.saveUser)));
   document.querySelectorAll("[data-reset-password]").forEach(button => button.addEventListener("click", () => openPasswordDialog(button.dataset.resetPassword)));
   document.querySelectorAll("[data-revoke-user]").forEach(button => button.addEventListener("click", () => revokeManagedUser(button.dataset.revokeUser)));
@@ -1663,6 +1665,7 @@ $("#deceasedChamberOccupied").addEventListener("change", setDeceasedChamberState
 $("#deceasedAutopsyReport").addEventListener("change", setAutopsyReportState);
 $("#psychologySearch").addEventListener("input", renderPsychologyRecords);
 $("#psychologyStatusFilter").addEventListener("change", renderPsychologyRecords);
+$("#userSearch").addEventListener("input", renderManagedUsers);
 $("#psychologyRecordStatus").addEventListener("change", setPsychologyCloseWarning);
 dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
 $("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
