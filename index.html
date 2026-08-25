@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=26">
+  <link rel="stylesheet" href="styles.css?v=27">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -36,7 +36,7 @@
       <h1 id="pageTitle">MCI Übersicht</h1>
     </div>
     <div class="header-actions">
-      <div class="session-info"><span id="userEmail"></span><button id="logoutBtn" class="logout-button" type="button">Abmelden</button></div>
+      <div class="session-info"><span id="userEmail"></span><button id="changeOwnPasswordBtn" class="logout-button" type="button">Passwort ändern</button><button id="logoutBtn" class="logout-button" type="button">Abmelden</button></div>
       <span id="saveState" class="save-state">Synchronisiert</span>
       <button id="closeIncidentBtn" class="button button-danger hidden" type="button">MCI abschließen</button>
       <button id="newIncidentBtn" class="button button-primary" type="button">+ MCI anlegen</button>
@@ -360,9 +360,26 @@
     </form>
   </dialog>
 
+  <dialog id="passwordDialog" class="password-dialog">
+    <form id="passwordForm" method="dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Kontosicherheit</p><h2 id="passwordDialogTitle">Passwort ändern</h2></div>
+        <button id="closePasswordDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button>
+      </div>
+      <div class="form-body">
+        <p id="passwordDialogText" class="password-dialog-text"></p>
+        <div class="form-grid">
+          <label class="field"><span>Neues Passwort *</span><input id="newPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Mindestens 8 Zeichen"></label>
+          <label class="field"><span>Passwort bestätigen *</span><input id="confirmNewPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Passwort wiederholen"></label>
+        </div>
+      </div>
+      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelPasswordBtn" class="button" type="button">Abbrechen</button><button id="savePasswordBtn" class="button button-primary" type="submit">Passwort speichern</button></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=26"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>

@@ -173,6 +173,8 @@ dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 34
 .button-link-danger:hover:not(:disabled) { text-decoration: underline; }
 .button-link-danger:disabled { color: var(--muted); cursor: not-allowed; opacity: .55; }
 #userManagementError { margin-bottom: 14px; }
+.password-dialog { width: min(620px, calc(100% - 24px)); }
+.password-dialog-text { margin: 0 0 18px; color: var(--muted); line-height: 1.5; }
 
 @media (max-width: 900px) { .user-create-form { grid-template-columns: 1fr; }.user-permission-fields { grid-column: auto; } }
 @media (max-width: 680px) { .user-create-section, .user-list-section { padding: 16px; }.user-create-form { gap: 11px; } }

@@ -34,6 +34,7 @@ let toastTimer;
 let canDeleteHistory = false;
 let canManageUsers = false;
 let managedUsers = [];
+let passwordTargetUserId = "";
 
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#patientDialog");
@@ -142,6 +143,7 @@ function showLogin() {
   if ($("#bulletinDialog").open) $("#bulletinDialog").close();
   if ($("#labDialog").open) $("#labDialog").close();
   if ($("#deceasedDialog").open) $("#deceasedDialog").close();
+  if ($("#passwordDialog").open) $("#passwordDialog").close();
 }
 
 function setAuthError(message) {
@@ -410,12 +412,26 @@ function renderManagedUsers() {
         <td><strong>${escapeHtml(user.email)}</strong></td>
         <td class="bulletin-date">${formatDate(user.last_sign_in_at)}</td>
         <td><div class="user-row-permissions"><label class="check"><input data-user-delete-history type="checkbox" ${user.can_delete_history ? "checked" : ""}><span>Historie löschen</span></label><label class="check"><input data-user-manage-users type="checkbox" ${user.can_manage_users ? "checked" : ""} ${isSelf ? "disabled" : ""}><span>Benutzer verwalten</span></label></div></td>
-        <td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-save-user="${user.id}">Speichern</button><button class="button-link-danger" type="button" data-revoke-user="${user.id}" ${isSelf ? "disabled title=\"Der eigene Zugriff kann nicht entzogen werden\"" : ""}>Zugriff entziehen</button></div></td>
+        <td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-save-user="${user.id}">Speichern</button><button class="bulletin-edit-button" type="button" data-reset-password="${user.id}">Passwort setzen</button><button class="button-link-danger" type="button" data-revoke-user="${user.id}" ${isSelf ? "disabled title=\"Der eigene Zugriff kann nicht entzogen werden\"" : ""}>Zugriff entziehen</button></div></td>
       </tr>`;
     }).join("")
     : `<tr><td class="table-empty" colspan="5">Keine freigegebenen Benutzer vorhanden.</td></tr>`;
   document.querySelectorAll("[data-save-user]").forEach(button => button.addEventListener("click", () => saveManagedUser(button.dataset.saveUser)));
+  document.querySelectorAll("[data-reset-password]").forEach(button => button.addEventListener("click", () => openPasswordDialog(button.dataset.resetPassword)));
   document.querySelectorAll("[data-revoke-user]").forEach(button => button.addEventListener("click", () => revokeManagedUser(button.dataset.revokeUser)));
+}
+
+function openPasswordDialog(userId = "") {
+  const isOwnPassword = !userId || userId === currentUser?.id;
+  const target = managedUsers.find(user => user.id === userId);
+  passwordTargetUserId = isOwnPassword ? "" : userId;
+  $("#passwordForm").reset();
+  $("#passwordDialogTitle").textContent = isOwnPassword ? "Eigenes Passwort ändern" : "Passwort neu setzen";
+  $("#passwordDialogText").textContent = isOwnPassword
+    ? "Lege ein neues Passwort für dein eigenes Konto fest."
+    : `Lege ein neues Passwort für ${target?.display_name || target?.email || "diesen Benutzer"} fest.`;
+  $("#passwordDialog").showModal();
+  setTimeout(() => $("#newPassword").focus(), 50);
 }
 
 async function saveManagedUser(userId) {
@@ -1263,9 +1279,42 @@ $("#createUserForm").addEventListener("submit", async event => {
   }
 });
 
+$("#passwordForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const passwordForm = event.currentTarget;
+  if (!passwordForm.reportValidity()) return;
+  const password = $("#newPassword").value;
+  if (password !== $("#confirmNewPassword").value) {
+    showToast("Die eingegebenen Passwörter stimmen nicht überein.");
+    return;
+  }
+  const button = $("#savePasswordBtn");
+  button.disabled = true;
+  button.textContent = "Wird gespeichert …";
+  try {
+    if (passwordTargetUserId) {
+      if (!canManageUsers) throw new Error("Keine Berechtigung zum Setzen fremder Passwörter.");
+      await callUserManagement("reset_password", { userId: passwordTargetUserId, password });
+    } else {
+      const { error } = await db.auth.updateUser({ password });
+      if (error) throw new Error("Das eigene Passwort konnte nicht geändert werden. Bitte melde dich neu an und versuche es erneut.");
+    }
+    $("#passwordDialog").close();
+    passwordForm.reset();
+    passwordTargetUserId = "";
+    showToast("Das Passwort wurde erfolgreich geändert.");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Passwort speichern";
+  }
+});
+
 $("#logoutBtn").addEventListener("click", async () => {
   if (db) await db.auth.signOut();
 });
+$("#changeOwnPasswordBtn").addEventListener("click", () => openPasswordDialog());
 $("#newIncidentBtn").addEventListener("click", openIncidentDialog);
 $("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
 $("#navIncidentsBtn").addEventListener("click", showIncidentOverview);
@@ -1286,6 +1335,8 @@ $("#closeLabDialogBtn").addEventListener("click", () => $("#labDialog").close())
 $("#cancelLabBtn").addEventListener("click", () => $("#labDialog").close());
 $("#closeDeceasedDialogBtn").addEventListener("click", () => $("#deceasedDialog").close());
 $("#cancelDeceasedBtn").addEventListener("click", () => $("#deceasedDialog").close());
+$("#closePasswordDialogBtn").addEventListener("click", () => $("#passwordDialog").close());
+$("#cancelPasswordBtn").addEventListener("click", () => $("#passwordDialog").close());
 $("#releaseChamberBtn").addEventListener("click", releaseDeceasedChamber);
 $("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#cancelIncidentBtn").addEventListener("click", () => $("#incidentDialog").close());
@@ -1306,5 +1357,6 @@ $("#incidentDialog").addEventListener("click", event => { if (event.target === $
 $("#bulletinDialog").addEventListener("click", event => { if (event.target === $("#bulletinDialog")) $("#bulletinDialog").close(); });
 $("#labDialog").addEventListener("click", event => { if (event.target === $("#labDialog")) $("#labDialog").close(); });
 $("#deceasedDialog").addEventListener("click", event => { if (event.target === $("#deceasedDialog")) $("#deceasedDialog").close(); });
+$("#passwordDialog").addEventListener("click", event => { if (event.target === $("#passwordDialog")) $("#passwordDialog").close(); });
 
 initialize();

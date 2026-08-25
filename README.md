@@ -22,6 +22,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Suche und Triagefilter
 - Geschützter Datenzugriff durch Row Level Security
 - Berechtigungsgeschützte Benutzerverwaltung für Konten und Sonderrechte
+- Eigenes Passwort ändern und Passwörter durch die Benutzerverwaltung neu setzen
 
 ## 1. Datenbank einrichten
 
@@ -113,7 +114,7 @@ Die Totenübersicht dokumentiert Patientenname, Todesdatum, vermuteten Todesumst
 
 ## Weitere Benutzer freigeben
 
-Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
+Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, Passwort, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. Jeder angemeldete Benutzer kann außerdem über **Passwort ändern** im Kopfbereich sein eigenes Passwort setzen. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
 
 ### Recht zum Löschen von Historien
 

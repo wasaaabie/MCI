@@ -145,6 +145,16 @@ Deno.serve(async (request) => {
     .maybeSingle();
   if (!target) return response({ error: "Benutzer wurde nicht gefunden." }, 404);
 
+  if (action === "reset_password") {
+    const password = typeof body.password === "string" ? body.password : "";
+    if (password.length < 8 || password.length > 256) {
+      return response({ error: "Das Passwort muss zwischen 8 und 256 Zeichen lang sein." }, 400);
+    }
+    const { error } = await admin.auth.admin.updateUserById(userId, { password });
+    if (error) return response({ error: "Das Passwort konnte nicht gesetzt werden." }, 500);
+    return response({ ok: true });
+  }
+
   if (action === "update") {
     const displayName = cleanText(body.displayName, 80);
     const nextCanManageUsers = Boolean(body.canManageUsers);
