@@ -2617,16 +2617,8 @@ $("#fireSearch").addEventListener("input", renderFireInvestigations);
 $("#fireStatusFilter").addEventListener("change", renderFireInvestigations);
 $("#fireCauseFilter").addEventListener("change", renderFireInvestigations);
 $("#fireInvestigationStatus").addEventListener("change", setFireCloseWarning);
-dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); });
-$("#incidentDialog").addEventListener("click", event => { if (event.target === $("#incidentDialog")) $("#incidentDialog").close(); });
-$("#bulletinDialog").addEventListener("click", event => { if (event.target === $("#bulletinDialog")) $("#bulletinDialog").close(); });
-$("#labDialog").addEventListener("click", event => { if (event.target === $("#labDialog")) $("#labDialog").close(); });
-$("#deceasedDialog").addEventListener("click", event => { if (event.target === $("#deceasedDialog")) $("#deceasedDialog").close(); });
-$("#passwordDialog").addEventListener("click", event => { if (event.target === $("#passwordDialog")) $("#passwordDialog").close(); });
-$("#psychologyRecordDialog").addEventListener("click", event => { if (event.target === $("#psychologyRecordDialog")) $("#psychologyRecordDialog").close(); });
-$("#psychologySessionDialog").addEventListener("click", event => { if (event.target === $("#psychologySessionDialog")) $("#psychologySessionDialog").close(); });
-$("#physiologyRecordDialog").addEventListener("click", event => { if (event.target === $("#physiologyRecordDialog")) $("#physiologyRecordDialog").close(); });
-$("#physiologySessionDialog").addEventListener("click", event => { if (event.target === $("#physiologySessionDialog")) $("#physiologySessionDialog").close(); });
-["#fireInvestigationDialog", "#firePersonDialog", "#fireEvidenceDialog", "#fireLogDialog"].forEach(selector => $(selector).addEventListener("click", event => { if (event.target === $(selector)) $(selector).close(); }));
+document.querySelectorAll("dialog").forEach(modal => {
+  modal.addEventListener("cancel", event => event.preventDefault());
+});
 
 initialize();
