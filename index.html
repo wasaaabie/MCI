@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=33">
+  <link rel="stylesheet" href="styles.css?v=34">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -44,12 +44,14 @@
       <button id="newLabBtn" class="button button-primary hidden" type="button">+ Labor Request</button>
       <button id="newDeceasedBtn" class="button button-primary hidden" type="button">+ Person erfassen</button>
       <button id="newPatientBtn" class="button button-primary hidden" type="button">+ Patient anlegen</button>
+      <button id="newNormalPatientBtn" class="button button-primary hidden" type="button">+ Übergabe anlegen</button>
     </div>
   </header>
 
   <nav id="appNav" class="app-nav hidden" aria-label="Hauptnavigation">
     <div class="nav-heading"><p class="nav-label">Module</p><button id="navCollapseBtn" class="nav-collapse" type="button" aria-label="Menü einklappen" aria-expanded="true" title="Menü einklappen"><span aria-hidden="true">‹</span></button></div>
     <button id="navIncidentsBtn" class="nav-item active" type="button" title="MCI-Verwaltung"><span class="nav-icon">M</span><span class="nav-copy"><strong>MCI-Verwaltung</strong><small>Einsätze &amp; Historie</small></span></button>
+    <button id="navNormalPatientsBtn" class="nav-item" type="button" title="Normale Patientenübergabe"><span class="nav-icon">P</span><span class="nav-copy"><strong>Patientenübergabe</strong><small>Reguläre Patienten</small></span></button>
     <button id="navBulletinBtn" class="nav-item" type="button" title="Schwarzes Brett"><span class="nav-icon">B</span><span class="nav-copy"><strong>Schwarzes Brett</strong><small>Anliegen &amp; Vorfälle</small></span></button>
     <button id="navLabBtn" class="nav-item" type="button" title="Labor Requests"><span class="nav-icon">L</span><span class="nav-copy"><strong>Labor Requests</strong><small>Proben &amp; Hinweise</small></span></button>
     <button id="navDeceasedBtn" class="nav-item" type="button" title="Totenübersicht"><span class="nav-icon deceased-nav-icon">†</span><span class="nav-copy"><strong>Totenübersicht</strong><small>Kühlfächer &amp; Dokumentation</small></span></button>
@@ -321,6 +323,26 @@
     </section>
   </main>
 
+  <main id="normalPatientsMain" class="hidden">
+    <section class="incident-intro">
+      <div><p class="eyebrow">Reguläre Versorgung</p><h2>Normale Patientenübergaben</h2><p>Versorgung, Übergabe im Krankenhaus und Nachkontrollen dokumentieren.</p></div>
+      <button id="newNormalPatientMainBtn" class="button button-primary" type="button">+ Neue Übergabe</button>
+    </section>
+    <section class="summary normal-patient-summary" aria-label="Übergabeübersicht">
+      <div class="summary-card"><span>Gesamt</span><strong id="normalCountAll">0</strong></div>
+      <div class="summary-card"><span>Mit OP</span><strong id="normalCountSurgery">0</strong></div>
+      <div class="summary-card"><span>Nachkontrolle</span><strong id="normalCountFollowUp">0</strong></div>
+    </section>
+    <section class="toolbar" aria-label="Patientenübergaben durchsuchen">
+      <label class="search-field"><span class="sr-only">Patientenübergaben suchen</span><input id="normalPatientSearch" type="search" placeholder="Name, Einheit, Krankenhaus oder Behandlungsplatz suchen …"></label>
+    </section>
+    <section id="normalPatientsEmpty" class="empty-state">
+      <div class="empty-icon">+</div><h2>Noch keine Übergaben erfasst</h2><p>Lege den ersten regulären Patientendatensatz an.</p>
+      <button id="normalEmptyNewBtn" class="button button-primary" type="button">Erste Übergabe anlegen</button>
+    </section>
+    <section id="normalPatientGrid" class="patient-grid" aria-live="polite"></section>
+  </main>
+
   <main id="appMain" class="hidden">
     <section id="incidentContext" class="incident-context">
       <div><p class="eyebrow" id="incidentStatusLabel">Aktive MCI</p><h2 id="incidentTitle"></h2><p id="incidentMeta"></p></div>
@@ -429,15 +451,15 @@
       <div class="form-body">
         <input id="patientId" type="hidden">
         <section class="form-section">
-          <div class="section-heading"><span>01</span><div><h3>Patient &amp; Sichtung</h3><p>Identität, Beschreibung und Priorität</p></div></div>
+          <div class="section-heading"><span>01</span><div><h3 id="patientSectionTitle">Patient &amp; Sichtung</h3><p id="patientSectionDescription">Identität, Beschreibung und Priorität</p></div></div>
           <div class="form-grid">
             <label class="field"><span>Patientenname *</span><input id="name" required autocomplete="off" placeholder="Name oder Unbekannt"></label>
-            <label class="field"><span>Patientennummer</span><input id="patientNumber" autocomplete="off" placeholder="z. B. P-001"></label>
+            <label id="patientNumberField" class="field"><span>Patientennummer</span><input id="patientNumber" autocomplete="off" placeholder="z. B. P-001"></label>
             <label class="field"><span>Geschlecht</span><select id="gender"><option value="">Keine Angabe</option><option>Männlich</option><option>Weiblich</option><option>Divers</option><option>Unbekannt</option></select></label>
             <label class="field"><span>Alter / Geburtsdatum</span><input id="age" autocomplete="off" placeholder="z. B. 42 oder 12.05.1984"></label>
             <label class="field field-wide"><span>Beschreibung der Person</span><textarea id="description" rows="2" placeholder="Kleidung, Statur, besondere Merkmale …"></textarea></label>
-            <label class="field"><span>Triage-Einstufung *</span><select id="triage" required><option value="unassigned">Noch nicht eingestuft</option><option value="red">SK I · Rot – sofort</option><option value="yellow">SK II · Gelb – dringend</option><option value="green">SK III · Grün – nachrangig</option><option value="black">Schwarz – verstorben</option></select></label>
-            <label class="field"><span>Zeitpunkt der Sichtung</span><input id="triageTime" type="datetime-local"></label>
+            <label id="triageField" class="field"><span>Triage-Einstufung *</span><select id="triage" required><option value="unassigned">Noch nicht eingestuft</option><option value="red">SK I · Rot – sofort</option><option value="yellow">SK II · Gelb – dringend</option><option value="green">SK III · Grün – nachrangig</option><option value="black">Schwarz – verstorben</option></select></label>
+            <label class="field"><span id="triageTimeLabel">Zeitpunkt der Sichtung</span><input id="triageTime" type="datetime-local"></label>
           </div>
           <div id="triageHistoryPanel" class="triage-history hidden">
             <h4>Triage-Verlauf</h4>
@@ -453,7 +475,7 @@
             <label class="field"><span>Behandelnde Einheit vor Ort</span><input id="unitOnSite" autocomplete="off" placeholder="z. B. Ambulance 65"></label>
             <label class="field"><span>Zielkrankenhaus</span><select id="destinationHospital"><option value="">Noch nicht festgelegt</option><option value="EMT">EMT</option><option value="SSMC">SSMC</option></select></label>
           </div>
-          <div class="check-grid">
+          <div id="onSiteChecks" class="check-grid">
             <label class="check"><input id="treatedOnSite" type="checkbox"><span>Vor Ort behandelt</span></label>
             <label class="check"><input id="idCheckCode7" type="checkbox"><span>Ausweiskontrolle</span></label>
             <label class="check ready-check"><input id="readyForTransport" type="checkbox"><span>Transportbereit</span></label>
@@ -469,11 +491,16 @@
             <label class="field field-wide"><span>Klinische Notizen</span><textarea id="hospitalNotes" rows="3" placeholder="Diagnose, Verlauf, Besonderheiten …"></textarea></label>
           </div>
           <div class="check-grid hospital-checks">
-            <label class="check arrival-check"><input id="admitted" type="checkbox"><span>Eingeliefert</span></label>
+            <label id="admittedCheck" class="check arrival-check"><input id="admitted" type="checkbox"><span>Eingeliefert</span></label>
             <label class="check"><input id="surgery" type="checkbox"><span>OP</span></label>
-            <label class="check"><input id="treatedHospital" type="checkbox"><span>Behandelt</span></label>
-            <label class="check"><input id="idCheckHospital" type="checkbox"><span>Ausweiskontrolle</span></label>
-            <label class="check"><input id="discharged" type="checkbox"><span>Entlassen</span></label>
+            <label id="treatedHospitalCheck" class="check"><input id="treatedHospital" type="checkbox"><span>Behandelt</span></label>
+            <label id="idCheckHospitalCheck" class="check"><input id="idCheckHospital" type="checkbox"><span>Ausweiskontrolle</span></label>
+            <label id="dischargedCheck" class="check"><input id="discharged" type="checkbox"><span>Entlassen</span></label>
+            <label class="check"><input id="followUp" type="checkbox"><span>Nachkontrolle</span></label>
+          </div>
+          <div class="form-grid conditional-fields">
+            <label id="surgeryReportField" class="field field-wide hidden"><span>OP-Bericht</span><textarea id="surgeryReport" rows="4" placeholder="Eingriff, Verlauf und Ergebnis dokumentieren …"></textarea></label>
+            <label id="followUpDateField" class="field hidden"><span>Datum der Nachkontrolle *</span><input id="followUpDate" type="date"></label>
           </div>
         </section>
 
@@ -509,6 +536,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=33"></script>
+  <script src="app.js?v=34"></script>
 </body>
 </html>

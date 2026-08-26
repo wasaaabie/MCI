@@ -14,10 +14,12 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Totenübersicht mit Obduktionsstatus und Live-Belegung von 16 Kühlfächern
 - Optionales Sonderrecht zum endgültigen Löschen sämtlicher Historieneinträge
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
+- Eigene Seite für normale Patientenübergaben ohne MCI, Triage und Patientennummer
 - Automatische Live-Aktualisierung
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
 - Triage mit zeitlichem Änderungsverlauf
 - Versorgung, Transportstatus und Krankenhausdokumentation
+- Aufklappbarer OP-Bericht und Nachkontrolle mit Standarddatum heute + 2 Tage
 - Farbliche Übersicht für transportbereite, unterwegs befindliche und angekommene Patienten
 - Suche und Triagefilter
 - Geschützter Datenzugriff durch Row Level Security
@@ -34,7 +36,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 4. Den vollständigen Inhalt aus `supabase.sql` einfügen.
 5. **Run** ausführen.
 
-Damit werden die Patiententabelle, die Mitgliederliste, Live-Updates und sämtliche Zugriffsregeln angelegt.
+Damit werden die MCI- und Übergabetabellen, die Mitgliederliste, Live-Updates und sämtliche Zugriffsregeln angelegt.
 
 ### Bestehende Installation aktualisieren
 

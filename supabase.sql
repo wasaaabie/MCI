@@ -49,6 +49,14 @@ create table if not exists public.patients (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.normal_patient_handoffs (
+  id uuid primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.activity_log (
   id bigint generated always as identity primary key,
   incident_id uuid not null references public.incidents(id) on delete restrict,
@@ -290,6 +298,7 @@ end $$;
 
 alter table public.patients alter column incident_id set not null;
 create index if not exists patients_incident_id_idx on public.patients (incident_id);
+create index if not exists normal_patient_handoffs_updated_idx on public.normal_patient_handoffs (updated_at desc);
 create index if not exists incidents_status_started_idx on public.incidents (status, started_at desc);
 create index if not exists activity_log_incident_created_idx on public.activity_log (incident_id, created_at desc);
 create index if not exists bulletin_entries_status_created_idx on public.bulletin_entries (status, created_at desc);
@@ -762,6 +771,7 @@ grant execute on function public.delete_history_entry(text, uuid) to authenticat
 alter table public.mci_members enable row level security;
 alter table public.incidents enable row level security;
 alter table public.patients enable row level security;
+alter table public.normal_patient_handoffs enable row level security;
 alter table public.activity_log enable row level security;
 alter table public.bulletin_entries enable row level security;
 alter table public.lab_requests enable row level security;
@@ -776,6 +786,7 @@ alter table public.fire_investigation_log enable row level security;
 revoke all on public.mci_members from anon, authenticated;
 revoke all on public.incidents from anon, authenticated;
 revoke all on public.patients from anon, authenticated;
+revoke all on public.normal_patient_handoffs from anon, authenticated;
 revoke all on public.activity_log from anon, authenticated;
 revoke all on public.bulletin_entries from anon, authenticated;
 revoke all on public.lab_requests from anon, authenticated;
@@ -789,6 +800,7 @@ revoke all on public.fire_investigation_log from anon, authenticated;
 grant select on public.mci_members to authenticated;
 grant select, insert, update on public.incidents to authenticated;
 grant select, insert, update, delete on public.patients to authenticated;
+grant select, insert, update, delete on public.normal_patient_handoffs to authenticated;
 grant select on public.activity_log to authenticated;
 grant select, insert, update on public.bulletin_entries to authenticated;
 grant select, insert, update on public.lab_requests to authenticated;
@@ -1041,6 +1053,33 @@ create policy "Mitglieder lesen Patienten"
 on public.patients for select to authenticated
 using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
 
+drop policy if exists "Mitglieder lesen normale Übergaben" on public.normal_patient_handoffs;
+create policy "Mitglieder lesen normale Übergaben"
+on public.normal_patient_handoffs for select to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
+
+drop policy if exists "Mitglieder erstellen normale Übergaben" on public.normal_patient_handoffs;
+create policy "Mitglieder erstellen normale Übergaben"
+on public.normal_patient_handoffs for insert to authenticated
+with check (
+  updated_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+);
+
+drop policy if exists "Mitglieder ändern normale Übergaben" on public.normal_patient_handoffs;
+create policy "Mitglieder ändern normale Übergaben"
+on public.normal_patient_handoffs for update to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()))
+with check (
+  updated_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+);
+
+drop policy if exists "Mitglieder löschen normale Übergaben" on public.normal_patient_handoffs;
+create policy "Mitglieder löschen normale Übergaben"
+on public.normal_patient_handoffs for delete to authenticated
+using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
+
 drop policy if exists "Mitglieder erstellen Patienten" on public.patients;
 create policy "Mitglieder erstellen Patienten"
 on public.patients for insert to authenticated
@@ -1078,6 +1117,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'patients'
   ) then
     alter publication supabase_realtime add table public.patients;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'normal_patient_handoffs'
+  ) then
+    alter publication supabase_realtime add table public.normal_patient_handoffs;
   end if;
   if not exists (
     select 1 from pg_publication_tables

@@ -13,11 +13,13 @@ const triageLabels = {
 const fields = [
   "name", "patientNumber", "gender", "age", "description", "triage", "triageTime",
   "injuries", "medication", "unitOnSite", "treatmentArea", "destinationHospital",
-  "physician", "hospitalNotes", "notes"
+  "physician", "hospitalNotes", "surgeryReport", "followUpDate", "notes"
 ];
-const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged"];
+const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged", "followUp"];
+const normalPatientFields = ["name", "gender", "age", "description", "injuries", "medication", "unitOnSite", "treatmentArea", "destinationHospital", "physician", "hospitalNotes", "surgeryReport", "followUpDate", "notes"];
 
 let patients = [];
+let normalPatients = [];
 let incidents = [];
 let activities = [];
 let bulletinEntries = [];
@@ -45,6 +47,7 @@ let canAccessPsychology = false;
 let canAccessFireInvestigation = false;
 let managedUsers = [];
 let passwordTargetUserId = "";
+let patientDialogMode = "mci";
 
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#patientDialog");
@@ -98,6 +101,7 @@ async function applySession(session) {
     currentUser = null;
     stopRealtime();
     patients = [];
+    normalPatients = [];
     showLogin();
     return;
   }
@@ -166,6 +170,7 @@ function showLogin() {
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
+  $("#normalPatientsMain").classList.add("hidden");
   $("#incidentMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   if (dialog.open) dialog.close();
@@ -243,6 +248,9 @@ function startRealtime() {
         loadIncidents();
         if (currentIncident) loadRemotePatients();
       }, 150);
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "normal_patient_handoffs" }, () => {
+      if (!$("#normalPatientsMain").classList.contains("hidden")) loadNormalPatients();
     })
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_log" }, payload => {
       if (currentIncident && payload.new?.incident_id === currentIncident.id) loadActivity();
@@ -336,6 +344,7 @@ function showIncidentOverview() {
   activities = [];
   $("#pageTitle").textContent = "MCI Übersicht";
   $("#bulletinMain").classList.add("hidden");
+  $("#normalPatientsMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
@@ -360,6 +369,7 @@ async function openIncident(id) {
   currentIncident = incident;
   const closed = incident.status === "closed";
   $("#incidentMain").classList.add("hidden");
+  $("#normalPatientsMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
@@ -396,6 +406,7 @@ async function showBulletinBoard() {
   activities = [];
   $("#pageTitle").textContent = "Schwarzes Brett";
   $("#incidentMain").classList.add("hidden");
+  $("#normalPatientsMain").classList.add("hidden");
   $("#appMain").classList.add("hidden");
   $("#labMain").classList.add("hidden");
   $("#deceasedMain").classList.add("hidden");
@@ -414,7 +425,12 @@ async function showBulletinBoard() {
 }
 
 function setActiveNav(section) {
+  if (section !== "normalPatients") {
+    $("#normalPatientsMain").classList.add("hidden");
+    $("#newNormalPatientBtn").classList.add("hidden");
+  }
   $("#navIncidentsBtn").classList.toggle("active", section === "incidents");
+  $("#navNormalPatientsBtn").classList.toggle("active", section === "normalPatients");
   $("#navBulletinBtn").classList.toggle("active", section === "bulletin");
   $("#navLabBtn").classList.toggle("active", section === "lab");
   $("#navDeceasedBtn").classList.toggle("active", section === "deceased");
@@ -422,12 +438,79 @@ function setActiveNav(section) {
   $("#navPsychologyBtn").classList.toggle("active", section === "psychology");
   $("#navFireInvestigationBtn").classList.toggle("active", section === "fire");
   $("#navIncidentsBtn").setAttribute("aria-current", section === "incidents" ? "page" : "false");
+  $("#navNormalPatientsBtn").setAttribute("aria-current", section === "normalPatients" ? "page" : "false");
   $("#navBulletinBtn").setAttribute("aria-current", section === "bulletin" ? "page" : "false");
   $("#navLabBtn").setAttribute("aria-current", section === "lab" ? "page" : "false");
   $("#navDeceasedBtn").setAttribute("aria-current", section === "deceased" ? "page" : "false");
   $("#navUsersBtn").setAttribute("aria-current", section === "users" ? "page" : "false");
   $("#navPsychologyBtn").setAttribute("aria-current", section === "psychology" ? "page" : "false");
   $("#navFireInvestigationBtn").setAttribute("aria-current", section === "fire" ? "page" : "false");
+}
+
+async function showNormalPatientOverview() {
+  currentIncident = null;
+  patients = [];
+  activities = [];
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyMain", "#psychologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  $("#normalPatientsMain").classList.remove("hidden");
+  ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
+  $("#newNormalPatientBtn").classList.remove("hidden");
+  $("#pageTitle").textContent = "Normale Patientenübergabe";
+  $("#saveState").textContent = "Live synchronisiert";
+  setActiveNav("normalPatients");
+  await loadNormalPatients();
+}
+
+async function loadNormalPatients() {
+  if (!db || !currentUser) return;
+  $("#saveState").textContent = "Synchronisiere …";
+  const { data, error } = await db.from("normal_patient_handoffs").select("id, data, created_at, updated_at").order("updated_at", { ascending: false });
+  if (error) {
+    $("#saveState").textContent = "Synchronisierung fehlgeschlagen";
+    showToast("Patientenübergaben konnten nicht geladen werden. Bitte das aktualisierte SQL-Skript ausführen.");
+    return;
+  }
+  normalPatients = (data || []).map(row => ({
+    ...(row.data && typeof row.data === "object" ? row.data : {}),
+    id: row.id,
+    createdAt: row.data?.createdAt || row.created_at,
+    updatedAt: row.updated_at
+  }));
+  renderNormalPatients();
+  $("#saveState").textContent = `Live · ${new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function renderNormalPatients() {
+  const query = $("#normalPatientSearch").value.trim().toLocaleLowerCase("de");
+  const visible = normalPatients
+    .filter(patient => !query || [patient.name, patient.unitOnSite, patient.destinationHospital, patient.treatmentArea, patient.physician].some(value => String(value || "").toLocaleLowerCase("de").includes(query)))
+    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  $("#normalCountAll").textContent = normalPatients.length;
+  $("#normalCountSurgery").textContent = normalPatients.filter(patient => patient.surgery).length;
+  $("#normalCountFollowUp").textContent = normalPatients.filter(patient => patient.followUp).length;
+  $("#normalPatientsEmpty").classList.toggle("hidden", normalPatients.length > 0);
+  $("#normalPatientGrid").classList.toggle("hidden", normalPatients.length === 0);
+  $("#normalPatientGrid").innerHTML = visible.length ? visible.map(normalPatientCard).join("") : `<div class="no-results">Keine passenden Patientenübergaben gefunden.</div>`;
+  document.querySelectorAll("[data-edit-normal-id]").forEach(button => button.addEventListener("click", () => openDialog(button.dataset.editNormalId, "normal")));
+  document.querySelectorAll("[data-copy-normal-patient]").forEach(button => button.addEventListener("click", () => copyPatientAsText(button.dataset.copyNormalPatient, true)));
+}
+
+function normalPatientCard(patient) {
+  const statuses = [
+    patient.surgery && { label: "OP", style: "" },
+    patient.followUp && { label: `Nachkontrolle ${formatCalendarDate(patient.followUpDate)}`, style: "ready" }
+  ].filter(Boolean);
+  return `<article class="patient-card normal-patient-card">
+    <div class="card-top"><div><h2>${escapeHtml(patient.name || "Unbekannt")}</h2><span class="patient-no">Reguläre Übergabe</span></div><span class="triage-badge unassigned">Patient</span></div>
+    <div class="card-details">
+      <div class="detail"><span>Ankunft am Patienten</span><strong>${formatDate(patient.arrivalAt)}</strong></div>
+      <div class="detail"><span>Einheit vor Ort</span><strong title="${escapeHtml(patient.unitOnSite)}">${escapeHtml(patient.unitOnSite || "–")}</strong></div>
+      <div class="detail"><span>Zielkrankenhaus</span><strong>${escapeHtml(patient.destinationHospital || "–")}</strong></div>
+      <div class="detail"><span>Übergabe an</span><strong title="${escapeHtml(patient.treatmentArea)}">${escapeHtml(patient.treatmentArea || "–")}</strong></div>
+    </div>
+    <div class="status-row">${statuses.length ? statuses.map(status => `<span class="status-chip ${status.style}">${status.label}</span>`).join("") : `<span class="status-chip">Übergabe dokumentiert</span>`}</div>
+    <div class="card-footer"><span class="updated-at">Aktualisiert ${formatDate(patient.updatedAt)}</span><div class="patient-card-actions"><button class="edit-button" type="button" data-copy-normal-patient="${escapeHtml(patient.id)}">Als Text kopieren</button><button class="edit-button" type="button" data-edit-normal-id="${escapeHtml(patient.id)}">Öffnen</button></div></div>
+  </article>`;
 }
 
 async function callUserManagement(action, payload = {}) {
@@ -1301,6 +1384,7 @@ function activityEntry(entry) {
     hospitalNotes: "Klinische Notizen", notes: "Bemerkungen", treatedOnSite: "Vor Ort behandelt",
     idCheckCode7: "Ausweiskontrolle vor Ort", readyForTransport: "Transportbereit", transported: "Abtransportiert",
     admitted: "Eingeliefert", surgery: "OP", treatedHospital: "Im Krankenhaus behandelt",
+    surgeryReport: "OP-Bericht", followUp: "Nachkontrolle", followUpDate: "Datum der Nachkontrolle",
     idCheckHospital: "Ausweiskontrolle Krankenhaus", discharged: "Entlassen", triageHistory: "Triage-Verlauf"
   };
   const changed = Array.isArray(entry.changed_fields)
@@ -1417,7 +1501,9 @@ function patientCard(patient) {
     transportState === "ready" && { label: "Transportbereit", style: "ready" },
     transportState === "underway" && { label: "Unterwegs", style: "underway" },
     transportState === "arrived" && { label: "Im Krankenhaus", style: "arrived" },
-    patient.surgery && { label: "OP", style: "" }, patient.discharged && { label: "Entlassen", style: "" }
+    patient.surgery && { label: "OP", style: "" },
+    patient.followUp && { label: `Nachkontrolle ${formatCalendarDate(patient.followUpDate)}`, style: "ready" },
+    patient.discharged && { label: "Entlassen", style: "" }
   ].filter(Boolean);
   return `<article class="patient-card" data-triage="${escapeHtml(triage)}" data-transport="${transportState}">
     <div class="card-top"><div><h2>${escapeHtml(patient.patientNumber || "Ohne Patientennummer")}</h2><span class="patient-no">${escapeHtml(patient.name || "Unbekannt")}</span></div><span class="triage-badge ${escapeHtml(triage)}">${escapeHtml(triageLabels[triage] || triageLabels.unassigned)}</span></div>
@@ -1434,10 +1520,11 @@ function patientCard(patient) {
 
 function patientAsText(patient) {
   const value = input => String(input ?? "").trim() || "–";
+  const normal = !patient.patientNumber && Boolean(patient.arrivalAt);
   const lines = [
     "PATIENTENAKTE",
     "=============",
-    `Patientennummer: ${value(patient.patientNumber)}`,
+    ...(normal ? [`Ankunft am Patienten: ${formatDate(patient.arrivalAt)}`] : [`Patientennummer: ${value(patient.patientNumber)}`, `Sichtungszeit: ${formatDate(patient.triageTime)}`]),
     `Name: ${value(patient.name)}`,
     `Geschlecht: ${value(patient.gender)}`,
     `Alter / Geburtsdatum: ${value(patient.age)}`,
@@ -1453,6 +1540,9 @@ function patientAsText(patient) {
     `Behandelnder Mediziner: ${value(patient.physician)}`,
     `Behandlungsplatz / Übergabe an: ${value(patient.treatmentArea)}`,
     `Kliniknotizen: ${value(patient.hospitalNotes)}`,
+    `OP: ${patient.surgery ? "Ja" : "Nein"}`,
+    ...(patient.surgery ? [`OP-Bericht: ${value(patient.surgeryReport)}`] : []),
+    `Nachkontrolle: ${patient.followUp ? formatCalendarDate(patient.followUpDate) : "Nein"}`,
     "",
     "WEITERE NOTIZEN",
     value(patient.notes),
@@ -1462,8 +1552,8 @@ function patientAsText(patient) {
   return lines.join("\n");
 }
 
-async function copyPatientAsText(id) {
-  const patient = patients.find(item => item.id === id);
+async function copyPatientAsText(id, normal = false) {
+  const patient = (normal ? normalPatients : patients).find(item => item.id === id);
   if (!patient) return showToast("Patientenakte wurde nicht gefunden.");
   const text = patientAsText(patient);
   const copyWithFallback = () => {
@@ -1494,27 +1584,49 @@ async function copyPatientAsText(id) {
   }
 }
 
-function openDialog(id = "") {
+function openDialog(id = "", mode = "mci") {
+  patientDialogMode = mode;
   form.reset();
-  const readOnly = currentIncident?.status === "closed";
+  const normal = mode === "normal";
+  const readOnly = !normal && currentIncident?.status === "closed";
   $("#patientId").value = id;
-  const patient = patients.find(item => item.id === id);
+  const patient = (normal ? normalPatients : patients).find(item => item.id === id);
   $("#dialogTitle").textContent = readOnly ? "Patient ansehen" : patient ? "Patient bearbeiten" : "Patient anlegen";
+  $("#patientSectionTitle").textContent = normal ? "Patient & Ankunft" : "Patient & Sichtung";
+  $("#patientSectionDescription").textContent = normal ? "Identität, Beschreibung und Ankunftszeit" : "Identität, Beschreibung und Priorität";
+  $("#triageTimeLabel").textContent = normal ? "Ankunft am Patienten" : "Zeitpunkt der Sichtung";
+  ["#patientNumberField", "#triageField", "#onSiteChecks", "#admittedCheck", "#treatedHospitalCheck", "#idCheckHospitalCheck", "#dischargedCheck"].forEach(selector => $(selector).classList.toggle("hidden", normal));
+  $("#triage").required = !normal;
   $("#deleteBtn").classList.toggle("hidden", !patient || readOnly);
   if (patient) {
-    fields.forEach(field => { $(`#${field}`).value = patient[field] || (field === "triage" ? "unassigned" : ""); });
-    checkFields.forEach(field => { $(`#${field}`).checked = Boolean(patient[field]); });
+    (normal ? normalPatientFields : fields).forEach(field => { $(`#${field}`).value = patient[field] || (field === "triage" ? "unassigned" : ""); });
+    (normal ? ["surgery", "followUp"] : checkFields).forEach(field => { $(`#${field}`).checked = Boolean(patient[field]); });
+    if (normal) $("#triageTime").value = patient.arrivalAt || "";
   } else {
-    $("#triage").value = "unassigned";
+    if (!normal) $("#triage").value = "unassigned";
     $("#triageTime").value = localDateTimeValue(new Date());
-    $("#patientNumber").value = nextPatientNumber();
+    if (!normal) $("#patientNumber").value = nextPatientNumber();
   }
   form.querySelectorAll("input, select, textarea").forEach(control => { control.disabled = readOnly; });
   $("#savePatientBtn").classList.toggle("hidden", readOnly);
   $("#cancelBtn").textContent = readOnly ? "Schließen" : "Abbrechen";
-  renderTriageHistory(patient);
+  if (normal) $("#triageHistoryPanel").classList.add("hidden"); else renderTriageHistory(patient);
+  updateConditionalPatientFields(!readOnly);
   dialog.showModal();
   setTimeout(() => $("#name").focus(), 50);
+}
+
+function updateConditionalPatientFields(applyDefault = true) {
+  const surgery = $("#surgery").checked;
+  const followUp = $("#followUp").checked;
+  $("#surgeryReportField").classList.toggle("hidden", !surgery);
+  $("#followUpDateField").classList.toggle("hidden", !followUp);
+  $("#followUpDate").required = followUp;
+  if (followUp && applyDefault && !$("#followUpDate").value) {
+    const date = new Date();
+    date.setDate(date.getDate() + 2);
+    $("#followUpDate").value = localDateValue(date);
+  }
 }
 
 function localDateTimeValue(date) {
@@ -1533,11 +1645,17 @@ function nextPatientNumber() {
 }
 
 function collectForm() {
-  const existing = patients.find(item => item.id === $("#patientId").value);
+  const normal = patientDialogMode === "normal";
+  const collection = normal ? normalPatients : patients;
+  const existing = collection.find(item => item.id === $("#patientId").value);
   const patient = { id: existing?.id || createUuid(), createdAt: existing?.createdAt || new Date().toISOString() };
-  fields.forEach(field => { patient[field] = $(`#${field}`).value.trim(); });
-  checkFields.forEach(field => { patient[field] = $(`#${field}`).checked; });
+  (normal ? normalPatientFields : fields).forEach(field => { patient[field] = $(`#${field}`).value.trim(); });
+  (normal ? ["surgery", "followUp"] : checkFields).forEach(field => { patient[field] = $(`#${field}`).checked; });
+  if (normal) patient.arrivalAt = $("#triageTime").value;
   patient.updatedAt = new Date().toISOString();
+  if (!patient.surgery) patient.surgeryReport = "";
+  if (!patient.followUp) patient.followUpDate = "";
+  if (normal) return patient;
   patient.triageHistory = Array.isArray(existing?.triageHistory) ? [...existing.triageHistory] : [];
   const previousTriage = existing?.triage || "unassigned";
   if (patient.triage !== previousTriage) {
@@ -1566,50 +1684,55 @@ function renderTriageHistory(patient, pendingTriage = "") {
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
-  if (!form.reportValidity() || !currentUser || currentIncident?.status !== "active") return;
+  const normal = patientDialogMode === "normal";
+  if (!form.reportValidity() || !currentUser || (!normal && currentIncident?.status !== "active")) return;
   const button = $("#savePatientBtn");
   button.disabled = true;
   button.textContent = "Speichert …";
   const patient = collectForm();
-  const { error } = await db.from("patients").upsert({
-    id: patient.id,
-    data: patient,
-    incident_id: currentIncident.id,
-    updated_by: currentUser.id,
-    updated_at: patient.updatedAt
-  });
+  const values = { id: patient.id, data: patient, updated_by: currentUser.id, updated_at: patient.updatedAt };
+  if (!normal) values.incident_id = currentIncident.id;
+  const { error } = await db.from(normal ? "normal_patient_handoffs" : "patients").upsert(values);
   button.disabled = false;
   button.textContent = "Datensatz speichern";
   if (error) {
     showToast("Speichern fehlgeschlagen. Bitte erneut versuchen.");
     return;
   }
-  const index = patients.findIndex(item => item.id === patient.id);
-  if (index >= 0) patients[index] = patient; else patients.push(patient);
-  render();
+  const collection = normal ? normalPatients : patients;
+  const index = collection.findIndex(item => item.id === patient.id);
+  if (index >= 0) collection[index] = patient; else collection.push(patient);
+  if (normal) renderNormalPatients(); else render();
   dialog.close();
   $("#saveState").textContent = "Synchronisiert";
-  showToast("Patientendatensatz gespeichert.");
-  loadActivity();
+  showToast(normal ? "Patientenübergabe gespeichert." : "Patientendatensatz gespeichert.");
+  if (!normal) loadActivity();
 });
 
 $("#deleteBtn").addEventListener("click", async () => {
-  if (currentIncident?.status !== "active") return;
+  const normal = patientDialogMode === "normal";
+  if (!normal && currentIncident?.status !== "active") return;
   const id = $("#patientId").value;
-  const patient = patients.find(item => item.id === id);
+  const collection = normal ? normalPatients : patients;
+  const patient = collection.find(item => item.id === id);
   if (!patient || !confirm(`Datensatz „${patient.name}“ wirklich löschen?`)) return;
   $("#deleteBtn").disabled = true;
-  const { error } = await db.from("patients").delete().eq("id", id);
+  const { error } = await db.from(normal ? "normal_patient_handoffs" : "patients").delete().eq("id", id);
   $("#deleteBtn").disabled = false;
   if (error) {
     showToast("Löschen fehlgeschlagen. Bitte erneut versuchen.");
     return;
   }
-  patients = patients.filter(item => item.id !== id);
-  render();
+  if (normal) {
+    normalPatients = normalPatients.filter(item => item.id !== id);
+    renderNormalPatients();
+  } else {
+    patients = patients.filter(item => item.id !== id);
+    render();
+  }
   dialog.close();
-  showToast("Patientendatensatz gelöscht.");
-  loadActivity();
+  showToast(normal ? "Patientenübergabe gelöscht." : "Patientendatensatz gelöscht.");
+  if (!normal) loadActivity();
 });
 
 function showToast(message) {
@@ -1949,6 +2072,7 @@ $("#changeOwnPasswordBtn").addEventListener("click", () => openPasswordDialog())
 $("#newIncidentBtn").addEventListener("click", openIncidentDialog);
 $("#newIncidentMainBtn").addEventListener("click", openIncidentDialog);
 $("#navIncidentsBtn").addEventListener("click", showIncidentOverview);
+$("#navNormalPatientsBtn").addEventListener("click", showNormalPatientOverview);
 $("#navBulletinBtn").addEventListener("click", showBulletinBoard);
 $("#navLabBtn").addEventListener("click", showLabRequests);
 $("#navDeceasedBtn").addEventListener("click", showDeceasedOverview);
@@ -1992,10 +2116,16 @@ $("#closeIncidentDialogBtn").addEventListener("click", () => $("#incidentDialog"
 $("#cancelIncidentBtn").addEventListener("click", () => $("#incidentDialog").close());
 $("#newPatientBtn").addEventListener("click", () => openDialog());
 $("#emptyNewBtn").addEventListener("click", () => openDialog());
+$("#newNormalPatientBtn").addEventListener("click", () => openDialog("", "normal"));
+$("#newNormalPatientMainBtn").addEventListener("click", () => openDialog("", "normal"));
+$("#normalEmptyNewBtn").addEventListener("click", () => openDialog("", "normal"));
 $("#closeDialogBtn").addEventListener("click", () => dialog.close());
 $("#cancelBtn").addEventListener("click", () => dialog.close());
 $("#searchInput").addEventListener("input", render);
 $("#triageFilter").addEventListener("change", render);
+$("#normalPatientSearch").addEventListener("input", renderNormalPatients);
+$("#surgery").addEventListener("change", () => updateConditionalPatientFields());
+$("#followUp").addEventListener("change", () => updateConditionalPatientFields());
 $("#triage").addEventListener("change", event => {
   const patient = patients.find(item => item.id === $("#patientId").value);
   renderTriageHistory(patient, event.target.value);
