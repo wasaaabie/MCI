@@ -6,14 +6,15 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=36">
+  <link rel="icon" type="image/svg+xml" href="assets/safms-logo.svg">
+  <link rel="stylesheet" href="styles.css?v=37">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
     <div class="auth-card">
       <div class="auth-brand">
-        <span class="auth-mark">M</span>
-        <div><p class="eyebrow">Secure Incident Access</p><h1>MCI Board</h1></div>
+        <img class="auth-logo" src="assets/safms-logo.svg" alt="SAFMS Logo">
+        <div><p class="eyebrow">San Andreas Fire &amp; Medical Services</p><h1>SAFMS Board</h1></div>
       </div>
       <p class="auth-intro">Melde dich mit deiner freigegebenen StateV Mail an.</p>
       <div id="configWarning" class="config-warning hidden">
@@ -31,9 +32,9 @@
   </section>
 
   <header id="appHeader" class="app-header hidden">
-    <div>
-      <p class="eyebrow">Incident Report</p>
-      <h1 id="pageTitle">MCI Übersicht</h1>
+    <div class="header-brand">
+      <img class="header-logo" src="assets/safms-logo.svg" alt="">
+      <div><p class="eyebrow">SAFMS Incident Management</p><h1 id="pageTitle">MCI Übersicht</h1></div>
     </div>
     <div class="header-actions">
       <div class="session-info"><span id="userEmail"></span><button id="changeOwnPasswordBtn" class="logout-button" type="button">Passwort ändern</button><button id="logoutBtn" class="logout-button" type="button">Abmelden</button></div>
