@@ -27,6 +27,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Berechtigungsgeschützte Benutzerverwaltung für Konten und Sonderrechte
 - Eigenes Passwort ändern und Passwörter durch die Benutzerverwaltung neu setzen
 - Geschützte Psychologie-Akten mit behandelndem Personal und chronologischem Sitzungsverlauf
+- Geschützte Physiologie-Akten mit behandelndem Personal und chronologischem Sitzungsverlauf
 - Fire-Prevention-and-Investigation-Akten mit Personen, Brandursache, Beweismitteln und Ermittlungsverlauf
 
 ## 1. Datenbank einrichten
@@ -123,6 +124,12 @@ Das Modul **Psychologie** ist nur für Benutzer mit der Berechtigung `can_access
 
 Die vorhandene Berechtigung **Historie endgültig löschen** gilt auch für abgeschlossene Psychologie-Akten. Beim Löschen werden die Akte und sämtliche enthaltenen Sitzungen unwiderruflich entfernt. Aktive oder pausierte Akten können nicht endgültig gelöscht werden.
 
+## Physiologie
+
+Das Modul **Physiologie** ist nur für Benutzer mit der Berechtigung `can_access_physiology` sichtbar und zusätzlich durch Row Level Security geschützt. Patientenakten enthalten Aktennummer, Stammdaten, behandelndes Personal, Status und allgemeine Anmerkungen. Sitzungen dokumentieren Anlass, Behandlungsverlauf, Befund, Maßnahmen, Folgetermin und einen optionalen internen Vermerk. Abgeschlossene Akten und deren Sitzungen sind schreibgeschützt.
+
+Mit der Berechtigung **Historie endgültig löschen** lassen sich abgeschlossene Physiologie-Akten einschließlich aller Sitzungen unwiderruflich entfernen. Aktive oder pausierte Akten sind davon ausgeschlossen.
+
 ## Fire Prevention and Investigation
 
 Das geschützte Modul führt Brandermittlungsakten mit Aktennummer, Einsatzdaten, Objekt- und Brandstellenbeschreibung, leitendem Ermittler sowie klassifizierter Brandursache. Pro Akte können beliebig viele betroffene Personen und Proben beziehungsweise Beweismittel erfasst werden. Beweismittel besitzen Laborstatus, Probenergebnis, Labornummer und eine dokumentierbare Chain of Custody. Untersuchungsschritte, Befragungen, Laborergebnisse und Übergaben erscheinen chronologisch im unveränderlichen Aktenverlauf.
@@ -131,7 +138,7 @@ Der Zugriff benötigt `can_access_fire_investigation`. Abgeschlossene Akten und 
 
 ## Weitere Benutzer freigeben
 
-Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, Passwort, Psychologie-Zugriff, Fire-Investigation-Zugriff, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. Jeder angemeldete Benutzer kann außerdem über **Passwort ändern** im Kopfbereich sein eigenes Passwort setzen. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
+Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angelegt. Dort lassen sich Anzeigename, Passwort, Psychologie-Zugriff, Physiologie-Zugriff, Fire-Investigation-Zugriff, das Recht zum Löschen der Historie und das Recht zur Benutzerverwaltung bearbeiten. Jeder angemeldete Benutzer kann außerdem über **Passwort ändern** im Kopfbereich sein eigenes Passwort setzen. **Zugriff entziehen** entfernt nur die Board-Freigabe; das Auth-Konto bleibt in Supabase erhalten. Wird dieselbe E-Mail später erneut angelegt, reaktiviert die Verwaltung das Konto mit dem neuen Startpasswort. Die eigene Verwaltungsberechtigung sowie die letzte verbleibende Benutzerverwaltung können nicht entfernt werden.
 
 ### Recht zum Löschen von Historien
 

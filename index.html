@@ -7,7 +7,7 @@
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
-  <link rel="stylesheet" href="styles.css?v=37">
+  <link rel="stylesheet" href="styles.css?v=39">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -57,6 +57,7 @@
     <button id="navLabBtn" class="nav-item" type="button" title="Labor Requests"><span class="nav-icon">L</span><span class="nav-copy"><strong>Labor Requests</strong><small>Proben &amp; Hinweise</small></span></button>
     <button id="navDeceasedBtn" class="nav-item" type="button" title="Totenübersicht"><span class="nav-icon deceased-nav-icon">†</span><span class="nav-copy"><strong>Totenübersicht</strong><small>Kühlfächer &amp; Dokumentation</small></span></button>
     <button id="navPsychologyBtn" class="nav-item hidden" type="button" title="Psychologie"><span class="nav-icon">Ψ</span><span class="nav-copy"><strong>Psychologie</strong><small>Akten &amp; Sitzungen</small></span></button>
+    <button id="navPhysiologyBtn" class="nav-item hidden" type="button" title="Physiologie"><span class="nav-icon">Φ</span><span class="nav-copy"><strong>Physiologie</strong><small>Akten &amp; Sitzungen</small></span></button>
     <button id="navFireInvestigationBtn" class="nav-item hidden" type="button" title="Fire Prevention and Investigation"><span class="nav-icon">F</span><span class="nav-copy"><strong>Fire Investigation</strong><small>Brandermittlungsakten</small></span></button>
     <button id="navUsersBtn" class="nav-item hidden" type="button" title="Benutzerverwaltung"><span class="nav-icon">U</span><span class="nav-copy"><strong>Benutzerverwaltung</strong><small>Konten &amp; Berechtigungen</small></span></button>
     <div class="nav-future"><span>Weiteres Modul</span><small>Navigation ist vorbereitet</small></div>
@@ -144,6 +145,88 @@
     </form>
   </dialog>
 
+  <main id="physiologyMain" class="hidden">
+    <section class="incident-intro">
+      <div><p class="eyebrow">Geschützter Fachbereich</p><h2>Physiologische Patientenakten</h2><p>Behandlungen, Zuständigkeiten und Sitzungsverläufe geschützt dokumentieren.</p></div>
+      <button id="newPhysiologyRecordBtn" class="button button-primary" type="button">+ Neue Akte</button>
+    </section>
+    <section class="deceased-summary psychology-summary" aria-label="Übersicht Physiologie-Akten">
+      <div class="deceased-counter"><span>Alle Akten</span><strong id="physiologyTotalCount">0</strong></div>
+      <div class="deceased-counter occupied"><span>Aktiv</span><strong id="physiologyActiveCount">0</strong></div>
+      <div class="deceased-counter pending"><span>Pausiert</span><strong id="physiologyPausedCount">0</strong></div>
+      <div class="deceased-counter free"><span>Abgeschlossen</span><strong id="physiologyClosedCount">0</strong></div>
+    </section>
+    <section class="toolbar psychology-toolbar" aria-label="Physiologie-Akten filtern">
+      <label class="search-field"><span class="sr-only">Akten suchen</span><input id="physiologySearch" type="search" placeholder="Patient, Aktennummer oder Personal suchen …"></label>
+      <label><span class="sr-only">Status filtern</span><select id="physiologyStatusFilter"><option value="">Alle Status</option><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="closed">Abgeschlossen</option></select></label>
+    </section>
+    <section class="board-section">
+      <div class="history-heading"><div><p class="eyebrow">Aktenregister</p><h2>Patientenakten</h2></div><span id="physiologyVisibleCount" class="history-count">0</span></div>
+      <div class="table-wrap"><table class="bulletin-table psychology-table"><thead><tr><th>Akte</th><th>Patient</th><th>Behandelndes Personal</th><th>Status</th><th>Letzte Sitzung</th><th></th></tr></thead><tbody id="physiologyRecordsBody"></tbody></table></div>
+    </section>
+  </main>
+
+  <main id="physiologyDetailMain" class="hidden">
+    <section class="psychology-detail-header">
+      <button id="backToPhysiologyBtn" class="button" type="button">← Zurück zur Übersicht</button>
+      <div class="psychology-detail-actions"><button id="editPhysiologyRecordBtn" class="button" type="button">Akte bearbeiten</button><button id="newPhysiologySessionBtn" class="button button-primary" type="button">+ Sitzung dokumentieren</button><button id="deletePhysiologyRecordBtn" class="button button-danger hidden" type="button">Akte endgültig löschen</button></div>
+    </section>
+    <section class="incident-context psychology-record-context">
+      <div><p class="eyebrow" id="physiologyRecordStatusLabel">Physiologie-Akte</p><h2 id="physiologyRecordTitle"></h2><p id="physiologyRecordMeta"></p></div>
+      <span id="physiologyReadOnlyBadge" class="readonly-badge hidden">Abgeschlossen · schreibgeschützt</span>
+    </section>
+    <section class="psychology-record-info">
+      <div><span>Behandelndes Personal</span><strong id="physiologyRecordStaff"></strong></div>
+      <div><span>Telefonnummer</span><strong id="physiologyRecordPhone"></strong></div>
+      <div><span>Geburtsdatum</span><strong id="physiologyRecordBirthDate"></strong></div>
+      <div class="psychology-notes"><span>Allgemeine Anmerkungen</span><p id="physiologyRecordNotes"></p></div>
+    </section>
+    <section class="activity-section psychology-session-section">
+      <div class="activity-heading"><div><p class="eyebrow">Aktenverlauf</p><h2>Sitzungen</h2></div><span id="physiologySessionCount" class="history-count">0</span></div>
+      <div id="physiologySessionList" class="psychology-session-list" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <dialog id="physiologyRecordDialog">
+    <form id="physiologyRecordForm" method="dialog">
+      <div class="dialog-header"><div><p class="eyebrow">Physiologie</p><h2 id="physiologyRecordDialogTitle">Patientenakte anlegen</h2></div><button id="closePhysiologyRecordDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button></div>
+      <div class="form-body">
+        <input id="physiologyRecordId" type="hidden">
+        <div class="form-grid">
+          <label class="field"><span>Aktennummer *</span><input id="physiologyFileNumber" required maxlength="50" autocomplete="off" placeholder="z. B. PHY-001"></label>
+          <label class="field"><span>Patientenname *</span><input id="physiologyPatientName" required maxlength="120" autocomplete="off"></label>
+          <label class="field"><span>Geburtsdatum</span><input id="physiologyBirthDate" type="date"></label>
+          <label class="field"><span>Telefonnummer</span><input id="physiologyPhone" type="tel" maxlength="50" autocomplete="off"></label>
+          <label class="field field-wide"><span>Behandelndes Personal *</span><input id="physiologyTreatingStaff" required maxlength="200" autocomplete="off" placeholder="Name oder mehrere Personen / Einheiten"></label>
+          <label class="field"><span>Aktenstatus *</span><select id="physiologyRecordStatus"><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="closed">Abgeschlossen</option></select></label>
+          <label class="field field-wide"><span>Allgemeine Anmerkungen</span><textarea id="physiologyGeneralNotes" rows="4" placeholder="Übergreifende Informationen zur Behandlung …"></textarea></label>
+        </div>
+        <div id="physiologyCloseWarning" class="archive-warning hidden" role="alert"><strong>Akte wird abgeschlossen</strong><span>Nach dem Speichern sind die Akte und ihre Sitzungen schreibgeschützt. Mit der Berechtigung „Historie endgültig löschen“ kann die vollständige Akte später gelöscht werden.</span></div>
+      </div>
+      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelPhysiologyRecordBtn" class="button" type="button">Abbrechen</button><button id="savePhysiologyRecordBtn" class="button button-primary" type="submit">Akte speichern</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="physiologySessionDialog">
+    <form id="physiologySessionForm" method="dialog">
+      <div class="dialog-header"><div><p class="eyebrow">Aktenverlauf</p><h2 id="physiologySessionDialogTitle">Sitzung dokumentieren</h2></div><button id="closePhysiologySessionDialogBtn" class="icon-button" type="button" aria-label="Dialog schließen">×</button></div>
+      <div class="form-body">
+        <input id="physiologySessionId" type="hidden">
+        <div class="form-grid">
+          <label class="field"><span>Datum und Uhrzeit *</span><input id="physiologySessionAt" type="datetime-local" required></label>
+          <label class="field"><span>Behandelnde Person *</span><input id="physiologySessionStaff" required maxlength="120" autocomplete="off"></label>
+          <label class="field field-wide"><span>Anlass *</span><textarea id="physiologySessionReason" required rows="2"></textarea></label>
+          <label class="field field-wide"><span>Behandlungsnotizen / Verlauf *</span><textarea id="physiologySessionNotes" required rows="5"></textarea></label>
+          <label class="field field-wide"><span>Einschätzung / Befund</span><textarea id="physiologySessionAssessment" rows="3"></textarea></label>
+          <label class="field field-wide"><span>Vereinbarte Maßnahmen</span><textarea id="physiologySessionMeasures" rows="3"></textarea></label>
+          <label class="field"><span>Nächster Termin</span><input id="physiologyNextAppointment" type="datetime-local"></label>
+          <label class="field field-wide"><span>Interner Vermerk</span><textarea id="physiologyInternalNote" rows="3"></textarea></label>
+        </div>
+      </div>
+      <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelPhysiologySessionBtn" class="button" type="button">Abbrechen</button><button id="savePhysiologySessionBtn" class="button button-primary" type="submit">Sitzung speichern</button></div>
+    </form>
+  </dialog>
+
   <main id="fireInvestigationMain" class="hidden">
     <section class="incident-intro"><div><p class="eyebrow">Fire Prevention and Investigation</p><h2>Brandermittlungsakten</h2><p>Brandstellen, betroffene Personen, Ursachen und Beweismittel zentral dokumentieren.</p></div><button id="newFireInvestigationBtn" class="button button-primary" type="button">+ Neue Akte</button></section>
     <section class="deceased-summary fire-summary" aria-label="Übersicht Brandermittlungen">
@@ -198,6 +281,7 @@
           <label class="check"><input id="newUserCanDeleteHistory" type="checkbox"><span>Historie endgültig löschen</span></label>
           <label class="check"><input id="newUserCanManageUsers" type="checkbox"><span>Benutzer verwalten</span></label>
           <label class="check"><input id="newUserCanAccessPsychology" type="checkbox"><span>Psychologie öffnen</span></label>
+          <label class="check"><input id="newUserCanAccessPhysiology" type="checkbox"><span>Physiologie öffnen</span></label>
           <label class="check"><input id="newUserCanAccessFireInvestigation" type="checkbox"><span>Fire Investigation öffnen</span></label>
         </div>
         <button id="createUserBtn" class="button button-primary" type="submit">Konto anlegen</button>
@@ -546,6 +630,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=39"></script>
 </body>
 </html>

@@ -42,6 +42,9 @@ let deceasedRecords = [];
 let psychologyRecords = [];
 let psychologySessions = [];
 let currentPsychologyRecord = null;
+let physiologyRecords = [];
+let physiologySessions = [];
+let currentPhysiologyRecord = null;
 let fireInvestigations = [];
 let firePeople = [];
 let fireEvidence = [];
@@ -58,6 +61,7 @@ let toastTimer;
 let canDeleteHistory = false;
 let canManageUsers = false;
 let canAccessPsychology = false;
+let canAccessPhysiology = false;
 let canAccessFireInvestigation = false;
 let managedUsers = [];
 let passwordTargetUserId = "";
@@ -189,7 +193,7 @@ async function applySession(session) {
 
   const { data: membership, error } = await db
     .from("mci_members")
-    .select("display_name, can_delete_history, can_manage_users, can_access_psychology, can_access_fire_investigation")
+    .select("display_name, can_delete_history, can_manage_users, can_access_psychology, can_access_physiology, can_access_fire_investigation")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -205,9 +209,11 @@ async function applySession(session) {
   canDeleteHistory = Boolean(membership.can_delete_history);
   canManageUsers = Boolean(membership.can_manage_users);
   canAccessPsychology = Boolean(membership.can_access_psychology);
+  canAccessPhysiology = Boolean(membership.can_access_physiology);
   canAccessFireInvestigation = Boolean(membership.can_access_fire_investigation);
   $("#navUsersBtn").classList.toggle("hidden", !canManageUsers);
   $("#navPsychologyBtn").classList.toggle("hidden", !canAccessPsychology);
+  $("#navPhysiologyBtn").classList.toggle("hidden", !canAccessPhysiology);
   $("#navFireInvestigationBtn").classList.toggle("hidden", !canAccessFireInvestigation);
   $("#userEmail").textContent = membership.display_name || user.email || "Einsatzkonto";
   $("#authGate").classList.add("hidden");
@@ -223,11 +229,15 @@ function showLogin() {
   canDeleteHistory = false;
   canManageUsers = false;
   canAccessPsychology = false;
+  canAccessPhysiology = false;
   canAccessFireInvestigation = false;
   managedUsers = [];
   psychologyRecords = [];
   psychologySessions = [];
   currentPsychologyRecord = null;
+  physiologyRecords = [];
+  physiologySessions = [];
+  currentPhysiologyRecord = null;
   fireInvestigations = [];
   firePeople = [];
   fireEvidence = [];
@@ -241,10 +251,13 @@ function showLogin() {
   $("#appNav").classList.add("hidden");
   $("#navUsersBtn").classList.add("hidden");
   $("#navPsychologyBtn").classList.add("hidden");
+  $("#navPhysiologyBtn").classList.add("hidden");
   $("#navFireInvestigationBtn").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   $("#psychologyMain").classList.add("hidden");
   $("#psychologyDetailMain").classList.add("hidden");
+  $("#physiologyMain").classList.add("hidden");
+  $("#physiologyDetailMain").classList.add("hidden");
   $("#fireInvestigationMain").classList.add("hidden");
   $("#fireInvestigationDetailMain").classList.add("hidden");
   $("#bulletinMain").classList.add("hidden");
@@ -261,6 +274,8 @@ function showLogin() {
   if ($("#passwordDialog").open) $("#passwordDialog").close();
   if ($("#psychologyRecordDialog").open) $("#psychologyRecordDialog").close();
   if ($("#psychologySessionDialog").open) $("#psychologySessionDialog").close();
+  if ($("#physiologyRecordDialog").open) $("#physiologyRecordDialog").close();
+  if ($("#physiologySessionDialog").open) $("#physiologySessionDialog").close();
   ["#fireInvestigationDialog", "#firePersonDialog", "#fireEvidenceDialog", "#fireLogDialog"].forEach(selector => { if ($(selector).open) $(selector).close(); });
 }
 
@@ -358,6 +373,14 @@ function startRealtime() {
       if (currentPsychologyRecord && payload.new?.record_id === currentPsychologyRecord.id) loadPsychologySessions();
       if (!$("#psychologyMain").classList.contains("hidden")) loadPsychologyRecords();
     })
+    .on("postgres_changes", { event: "*", schema: "public", table: "physiology_records" }, () => {
+      if (!$("#physiologyMain").classList.contains("hidden")) loadPhysiologyRecords();
+      if (currentPhysiologyRecord) refreshCurrentPhysiologyRecord();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "physiology_sessions" }, payload => {
+      if (currentPhysiologyRecord && payload.new?.record_id === currentPhysiologyRecord.id) loadPhysiologySessions();
+      if (!$("#physiologyMain").classList.contains("hidden")) loadPhysiologyRecords();
+    })
     .on("postgres_changes", { event: "*", schema: "public", table: "fire_investigations" }, () => refreshFireInvestigationView())
     .on("postgres_changes", { event: "*", schema: "public", table: "fire_investigation_people" }, () => refreshFireInvestigationChildren())
     .on("postgres_changes", { event: "*", schema: "public", table: "fire_investigation_evidence" }, () => refreshFireInvestigationChildren())
@@ -414,6 +437,13 @@ function hidePsychologyViews() {
   psychologySessions = [];
 }
 
+function hidePhysiologyViews() {
+  $("#physiologyMain").classList.add("hidden");
+  $("#physiologyDetailMain").classList.add("hidden");
+  currentPhysiologyRecord = null;
+  physiologySessions = [];
+}
+
 function hideFireInvestigationViews() {
   $("#fireInvestigationMain").classList.add("hidden");
   $("#fireInvestigationDetailMain").classList.add("hidden");
@@ -436,6 +466,7 @@ function showIncidentOverview() {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hidePhysiologyViews();
   hideFireInvestigationViews();
   $("#incidentMain").classList.remove("hidden");
   $("#appMain").classList.add("hidden");
@@ -462,6 +493,7 @@ async function openIncident(id) {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hidePhysiologyViews();
   hideFireInvestigationViews();
   $("#appMain").classList.remove("hidden");
   $("#pageTitle").textContent = incident.title;
@@ -499,6 +531,7 @@ async function showBulletinBoard() {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hidePhysiologyViews();
   hideFireInvestigationViews();
   $("#bulletinMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
@@ -523,6 +556,7 @@ function setActiveNav(section) {
   $("#navDeceasedBtn").classList.toggle("active", section === "deceased");
   $("#navUsersBtn").classList.toggle("active", section === "users");
   $("#navPsychologyBtn").classList.toggle("active", section === "psychology");
+  $("#navPhysiologyBtn").classList.toggle("active", section === "physiology");
   $("#navFireInvestigationBtn").classList.toggle("active", section === "fire");
   $("#navIncidentsBtn").setAttribute("aria-current", section === "incidents" ? "page" : "false");
   $("#navNormalPatientsBtn").setAttribute("aria-current", section === "normalPatients" ? "page" : "false");
@@ -531,6 +565,7 @@ function setActiveNav(section) {
   $("#navDeceasedBtn").setAttribute("aria-current", section === "deceased" ? "page" : "false");
   $("#navUsersBtn").setAttribute("aria-current", section === "users" ? "page" : "false");
   $("#navPsychologyBtn").setAttribute("aria-current", section === "psychology" ? "page" : "false");
+  $("#navPhysiologyBtn").setAttribute("aria-current", section === "physiology" ? "page" : "false");
   $("#navFireInvestigationBtn").setAttribute("aria-current", section === "fire" ? "page" : "false");
 }
 
@@ -538,7 +573,7 @@ async function showNormalPatientOverview() {
   currentIncident = null;
   patients = [];
   activities = [];
-  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyMain", "#psychologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyMain", "#psychologyDetailMain", "#physiologyMain", "#physiologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
   $("#normalPatientsMain").classList.remove("hidden");
   ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
   $("#newNormalPatientBtn").classList.remove("hidden");
@@ -641,7 +676,7 @@ async function showUserManagement() {
   patients = [];
   activities = [];
   $("#pageTitle").textContent = "Benutzerverwaltung";
-  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#psychologyMain", "#psychologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#psychologyMain", "#psychologyDetailMain", "#physiologyMain", "#physiologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
   $("#userManagementMain").classList.remove("hidden");
   ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
   setActiveNav("users");
@@ -675,7 +710,7 @@ function renderManagedUsers() {
         <td><input class="table-text-input" data-user-name value="${escapeHtml(user.display_name || "")}" maxlength="80" aria-label="Anzeigename von ${escapeHtml(user.email)}"></td>
         <td><strong>${escapeHtml(user.email)}</strong></td>
         <td class="bulletin-date">${formatDate(user.last_sign_in_at)}</td>
-        <td><div class="user-row-permissions"><label class="check"><input data-user-delete-history type="checkbox" ${user.can_delete_history ? "checked" : ""}><span>Historie löschen</span></label><label class="check"><input data-user-manage-users type="checkbox" ${user.can_manage_users ? "checked" : ""} ${isSelf ? "disabled" : ""}><span>Benutzer verwalten</span></label><label class="check"><input data-user-access-psychology type="checkbox" ${user.can_access_psychology ? "checked" : ""}><span>Psychologie öffnen</span></label><label class="check"><input data-user-access-fire type="checkbox" ${user.can_access_fire_investigation ? "checked" : ""}><span>Fire Investigation öffnen</span></label></div></td>
+        <td><div class="user-row-permissions"><label class="check"><input data-user-delete-history type="checkbox" ${user.can_delete_history ? "checked" : ""}><span>Historie löschen</span></label><label class="check"><input data-user-manage-users type="checkbox" ${user.can_manage_users ? "checked" : ""} ${isSelf ? "disabled" : ""}><span>Benutzer verwalten</span></label><label class="check"><input data-user-access-psychology type="checkbox" ${user.can_access_psychology ? "checked" : ""}><span>Psychologie öffnen</span></label><label class="check"><input data-user-access-physiology type="checkbox" ${user.can_access_physiology ? "checked" : ""}><span>Physiologie öffnen</span></label><label class="check"><input data-user-access-fire type="checkbox" ${user.can_access_fire_investigation ? "checked" : ""}><span>Fire Investigation öffnen</span></label></div></td>
         <td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-save-user="${user.id}">Speichern</button><button class="bulletin-edit-button" type="button" data-reset-password="${user.id}">Passwort setzen</button><button class="button-link-danger" type="button" data-revoke-user="${user.id}" ${isSelf ? "disabled title=\"Der eigene Zugriff kann nicht entzogen werden\"" : ""}>Zugriff entziehen</button></div></td>
       </tr>`;
     }).join("")
@@ -715,6 +750,7 @@ async function saveManagedUser(userId) {
       canDeleteHistory: row.querySelector("[data-user-delete-history]").checked,
       canManageUsers: row.querySelector("[data-user-manage-users]").checked,
       canAccessPsychology: row.querySelector("[data-user-access-psychology]").checked,
+      canAccessPhysiology: row.querySelector("[data-user-access-physiology]").checked,
       canAccessFireInvestigation: row.querySelector("[data-user-access-fire]").checked
     });
     await loadManagedUsers();
@@ -811,7 +847,7 @@ async function showPsychologyOverview() {
   currentFireInvestigation = null;
   psychologySessions = [];
   $("#pageTitle").textContent = "Psychologie";
-  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyDetailMain", "#physiologyMain", "#physiologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
   $("#psychologyMain").classList.remove("hidden");
   ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
   setActiveNav("psychology");
@@ -994,6 +1030,189 @@ async function deleteCurrentPsychologyRecord() {
   showToast("Die Psychologie-Akte wurde endgültig gelöscht.");
 }
 
+const physiologyStatusLabels = { active: "Aktiv", paused: "Pausiert", closed: "Abgeschlossen" };
+
+async function showPhysiologyOverview() {
+  if (!canAccessPhysiology) return;
+  currentIncident = null;
+  currentPsychologyRecord = null;
+  currentPhysiologyRecord = null;
+  currentFireInvestigation = null;
+  physiologySessions = [];
+  $("#pageTitle").textContent = "Physiologie";
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyMain", "#psychologyDetailMain", "#physiologyDetailMain", "#fireInvestigationMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  $("#physiologyMain").classList.remove("hidden");
+  ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
+  setActiveNav("physiology");
+  await loadPhysiologyRecords();
+}
+
+async function loadPhysiologyRecords() {
+  if (!db || !currentUser || !canAccessPhysiology) return;
+  const [{ data: records, error }, { data: sessionRefs }] = await Promise.all([
+    db.from("physiology_records").select("id, file_number, patient_name, birth_date, phone, treating_staff, general_notes, status, created_by_name, created_at, updated_by_name, updated_at, closed_by_name, closed_at").order("created_at", { ascending: false }),
+    db.from("physiology_sessions").select("record_id, session_at").order("session_at", { ascending: false })
+  ]);
+  if (error) {
+    physiologyRecords = [];
+    showToast("Physiologie-Akten konnten nicht geladen werden.");
+  } else {
+    const latestSessions = new Map();
+    (sessionRefs || []).forEach(session => { if (!latestSessions.has(session.record_id)) latestSessions.set(session.record_id, session.session_at); });
+    physiologyRecords = (records || []).map(record => ({ ...record, last_session_at: latestSessions.get(record.id) || null }));
+  }
+  renderPhysiologyRecords();
+}
+
+function renderPhysiologyRecords() {
+  const search = $("#physiologySearch").value.trim().toLowerCase();
+  const status = $("#physiologyStatusFilter").value;
+  const visible = physiologyRecords.filter(record => {
+    const haystack = `${record.file_number} ${record.patient_name} ${record.treating_staff}`.toLowerCase();
+    return (!search || haystack.includes(search)) && (!status || record.status === status);
+  });
+  $("#physiologyTotalCount").textContent = physiologyRecords.length;
+  $("#physiologyActiveCount").textContent = physiologyRecords.filter(record => record.status === "active").length;
+  $("#physiologyPausedCount").textContent = physiologyRecords.filter(record => record.status === "paused").length;
+  $("#physiologyClosedCount").textContent = physiologyRecords.filter(record => record.status === "closed").length;
+  $("#physiologyVisibleCount").textContent = visible.length;
+  $("#physiologyRecordsBody").innerHTML = visible.length ? visible.map(record => `<tr>
+    <td><strong>${escapeHtml(record.file_number)}</strong></td>
+    <td><strong>${escapeHtml(record.patient_name)}</strong><br><small>${record.birth_date ? formatDateOnly(record.birth_date) : "Geburtsdatum unbekannt"}</small></td>
+    <td>${escapeHtml(record.treating_staff)}</td>
+    <td><span class="psychology-status ${record.status}">${physiologyStatusLabels[record.status] || "Unbekannt"}</span></td>
+    <td class="bulletin-date">${record.last_session_at ? formatDate(record.last_session_at) : "Noch keine Sitzung"}</td>
+    <td><button class="bulletin-edit-button" type="button" data-open-physiology="${record.id}">Akte öffnen</button></td>
+  </tr>`).join("") : `<tr><td class="table-empty" colspan="6">Keine passenden Physiologie-Akten vorhanden.</td></tr>`;
+  document.querySelectorAll("[data-open-physiology]").forEach(button => button.addEventListener("click", () => openPhysiologyRecord(button.dataset.openPhysiology)));
+}
+
+async function openPhysiologyRecord(id) {
+  let record = physiologyRecords.find(item => item.id === id);
+  if (!record) {
+    const { data } = await db.from("physiology_records").select("*").eq("id", id).maybeSingle();
+    record = data;
+  }
+  if (!record) {
+    showToast("Die Physiologie-Akte wurde nicht gefunden.");
+    return;
+  }
+  currentPhysiologyRecord = record;
+  $("#physiologyMain").classList.add("hidden");
+  $("#physiologyDetailMain").classList.remove("hidden");
+  $("#pageTitle").textContent = `Akte ${record.file_number}`;
+  setActiveNav("physiology");
+  renderPhysiologyRecordDetail();
+  await loadPhysiologySessions();
+}
+
+async function refreshCurrentPhysiologyRecord() {
+  if (!currentPhysiologyRecord || !canAccessPhysiology) return;
+  const { data } = await db.from("physiology_records").select("*").eq("id", currentPhysiologyRecord.id).maybeSingle();
+  if (!data) {
+    showPhysiologyOverview();
+    return;
+  }
+  currentPhysiologyRecord = data;
+  renderPhysiologyRecordDetail();
+}
+
+function renderPhysiologyRecordDetail() {
+  const record = currentPhysiologyRecord;
+  if (!record) return;
+  const closed = record.status === "closed";
+  $("#physiologyRecordStatusLabel").textContent = physiologyStatusLabels[record.status] || "Physiologie-Akte";
+  $("#physiologyRecordTitle").textContent = record.patient_name;
+  $("#physiologyRecordMeta").textContent = `Akte ${record.file_number} · Angelegt von ${record.created_by_name || "Unbekannt"} am ${formatDate(record.created_at)}`;
+  $("#physiologyRecordStaff").textContent = record.treating_staff || "–";
+  $("#physiologyRecordPhone").textContent = record.phone || "–";
+  $("#physiologyRecordBirthDate").textContent = formatDateOnly(record.birth_date);
+  $("#physiologyRecordNotes").textContent = record.general_notes || "Keine allgemeinen Anmerkungen.";
+  $("#physiologyReadOnlyBadge").classList.toggle("hidden", !closed);
+  $("#editPhysiologyRecordBtn").classList.toggle("hidden", closed);
+  $("#newPhysiologySessionBtn").classList.toggle("hidden", closed);
+  $("#deletePhysiologyRecordBtn").classList.toggle("hidden", !(closed && canDeleteHistory));
+}
+
+function openPhysiologyRecordDialog(id = "") {
+  const record = physiologyRecords.find(item => item.id === id) || (currentPhysiologyRecord?.id === id ? currentPhysiologyRecord : null);
+  $("#physiologyRecordForm").reset();
+  $("#physiologyRecordId").value = record?.id || "";
+  $("#physiologyRecordDialogTitle").textContent = record ? "Patientenakte bearbeiten" : "Patientenakte anlegen";
+  $("#physiologyRecordStatus").querySelector('option[value="closed"]').disabled = !record;
+  if (record) {
+    $("#physiologyFileNumber").value = record.file_number;
+    $("#physiologyPatientName").value = record.patient_name;
+    $("#physiologyBirthDate").value = record.birth_date || "";
+    $("#physiologyPhone").value = record.phone || "";
+    $("#physiologyTreatingStaff").value = record.treating_staff;
+    $("#physiologyRecordStatus").value = record.status;
+    $("#physiologyGeneralNotes").value = record.general_notes || "";
+  }
+  setPhysiologyCloseWarning();
+  $("#physiologyRecordDialog").showModal();
+  setTimeout(() => $("#physiologyFileNumber").focus(), 50);
+}
+
+function setPhysiologyCloseWarning() {
+  const existing = Boolean($("#physiologyRecordId").value);
+  $("#physiologyCloseWarning").classList.toggle("hidden", !existing || $("#physiologyRecordStatus").value !== "closed");
+}
+
+async function loadPhysiologySessions() {
+  if (!currentPhysiologyRecord) return;
+  const { data, error } = await db.from("physiology_sessions").select("*").eq("record_id", currentPhysiologyRecord.id).order("session_at", { ascending: false });
+  physiologySessions = error ? [] : (data || []);
+  if (error) showToast("Sitzungsverlauf konnte nicht geladen werden.");
+  renderPhysiologySessions();
+}
+
+function renderPhysiologySessions() {
+  $("#physiologySessionCount").textContent = physiologySessions.length;
+  const editable = currentPhysiologyRecord?.status !== "closed";
+  $("#physiologySessionList").innerHTML = physiologySessions.length ? physiologySessions.map(session => {
+    const updated = session.updated_at ? ` · bearbeitet von ${escapeHtml(session.updated_by_name || "Unbekannt")} am ${formatDate(session.updated_at)}` : "";
+    return `<article class="psychology-session-card">
+      <div class="psychology-session-heading"><div><p class="eyebrow">${formatDate(session.session_at)}</p><h3>${escapeHtml(session.reason)}</h3></div>${editable ? `<button class="bulletin-edit-button" type="button" data-edit-physiology-session="${session.id}">Bearbeiten</button>` : ""}</div>
+      <div class="psychology-session-meta"><span>Behandelnde Person</span><strong>${escapeHtml(session.treating_staff)}</strong></div>
+      <div class="psychology-session-content"><div><span>Behandlungsnotizen / Verlauf</span><p>${formatMultiline(session.notes)}</p></div>${session.assessment ? `<div><span>Einschätzung / Befund</span><p>${formatMultiline(session.assessment)}</p></div>` : ""}${session.measures ? `<div><span>Vereinbarte Maßnahmen</span><p>${formatMultiline(session.measures)}</p></div>` : ""}${session.internal_note ? `<div class="internal-note"><span>Interner Vermerk</span><p>${formatMultiline(session.internal_note)}</p></div>` : ""}</div>
+      <footer><span>Nächster Termin: ${session.next_appointment ? formatDate(session.next_appointment) : "nicht festgelegt"}</span><small>Dokumentiert von ${escapeHtml(session.created_by_name || "Unbekannt")} am ${formatDate(session.created_at)}${updated}</small></footer>
+    </article>`;
+  }).join("") : `<div class="activity-empty">Für diese Akte wurden noch keine Sitzungen dokumentiert.</div>`;
+  document.querySelectorAll("[data-edit-physiology-session]").forEach(button => button.addEventListener("click", () => openPhysiologySessionDialog(button.dataset.editPhysiologySession)));
+}
+
+function openPhysiologySessionDialog(id = "") {
+  if (!currentPhysiologyRecord || currentPhysiologyRecord.status === "closed") return;
+  const session = physiologySessions.find(item => item.id === id);
+  $("#physiologySessionForm").reset();
+  $("#physiologySessionId").value = session?.id || "";
+  $("#physiologySessionDialogTitle").textContent = session ? "Sitzung bearbeiten" : "Sitzung dokumentieren";
+  $("#physiologySessionAt").value = localDateTimeValue(session?.session_at ? new Date(session.session_at) : new Date());
+  $("#physiologySessionStaff").value = session?.treating_staff || currentPhysiologyRecord.treating_staff || "";
+  $("#physiologySessionReason").value = session?.reason || "";
+  $("#physiologySessionNotes").value = session?.notes || "";
+  $("#physiologySessionAssessment").value = session?.assessment || "";
+  $("#physiologySessionMeasures").value = session?.measures || "";
+  $("#physiologyNextAppointment").value = session?.next_appointment ? localDateTimeValue(new Date(session.next_appointment)) : "";
+  $("#physiologyInternalNote").value = session?.internal_note || "";
+  $("#physiologySessionDialog").showModal();
+}
+
+async function deleteCurrentPhysiologyRecord() {
+  const record = currentPhysiologyRecord;
+  if (!record || record.status !== "closed" || !canDeleteHistory) return;
+  if (!confirm(`Physiologie-Akte „${record.file_number} – ${record.patient_name}“ einschließlich aller Sitzungen endgültig löschen? Dieser Vorgang ist unwiderruflich.`)) return;
+  const { error } = await db.rpc("delete_history_entry", { p_entry_type: "physiology", p_entry_id: record.id });
+  if (error) {
+    showToast("Die Physiologie-Akte konnte nicht gelöscht werden.");
+    return;
+  }
+  currentPhysiologyRecord = null;
+  await showPhysiologyOverview();
+  showToast("Die Physiologie-Akte wurde endgültig gelöscht.");
+}
+
 const fireStatusLabels = { open: "Offen", investigation: "Untersuchung", lab_pending: "Labor ausstehend", closed: "Abgeschlossen" };
 const fireCauseLabels = { technical: "Technisch", negligent: "Fahrlässig", intentional: "Vorsätzlich", natural: "Natürlich", undetermined: "Ungeklärt" };
 const fireCauseStatusLabels = { unknown: "Unbekannt", suspected: "Vermutet", confirmed: "Bestätigt" };
@@ -1006,7 +1225,7 @@ async function showFireInvestigationOverview() {
   currentIncident = null;
   currentFireInvestigation = null;
   currentPsychologyRecord = null;
-  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyMain", "#psychologyDetailMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
+  ["#incidentMain", "#appMain", "#bulletinMain", "#labMain", "#deceasedMain", "#userManagementMain", "#psychologyMain", "#psychologyDetailMain", "#physiologyMain", "#physiologyDetailMain", "#fireInvestigationDetailMain"].forEach(selector => $(selector).classList.add("hidden"));
   $("#fireInvestigationMain").classList.remove("hidden");
   ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
   $("#pageTitle").textContent = "Fire Investigation";
@@ -1189,6 +1408,7 @@ async function showLabRequests() {
   $("#deceasedMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hidePhysiologyViews();
   hideFireInvestigationViews();
   $("#labMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
@@ -1276,6 +1496,7 @@ async function showDeceasedOverview() {
   $("#labMain").classList.add("hidden");
   $("#userManagementMain").classList.add("hidden");
   hidePsychologyViews();
+  hidePhysiologyViews();
   hideFireInvestigationViews();
   $("#deceasedMain").classList.remove("hidden");
   $("#newIncidentBtn").classList.add("hidden");
@@ -1975,6 +2196,71 @@ $("#psychologySessionForm").addEventListener("submit", async event => {
   showToast(id ? "Sitzung wurde aktualisiert." : "Sitzung wurde dokumentiert.");
 });
 
+$("#physiologyRecordForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const recordForm = event.currentTarget;
+  if (!recordForm.reportValidity() || !currentUser || !canAccessPhysiology) return;
+  const id = $("#physiologyRecordId").value;
+  const values = {
+    file_number: $("#physiologyFileNumber").value.trim(),
+    patient_name: $("#physiologyPatientName").value.trim(),
+    birth_date: $("#physiologyBirthDate").value || null,
+    phone: $("#physiologyPhone").value.trim() || null,
+    treating_staff: $("#physiologyTreatingStaff").value.trim(),
+    general_notes: $("#physiologyGeneralNotes").value.trim() || null,
+    status: id ? $("#physiologyRecordStatus").value : "active"
+  };
+  const button = $("#savePhysiologyRecordBtn");
+  button.disabled = true;
+  button.textContent = "Wird gespeichert …";
+  const result = id
+    ? await db.from("physiology_records").update(values).eq("id", id).select("id").single()
+    : await db.from("physiology_records").insert({ id: createUuid(), ...values }).select("id").single();
+  button.disabled = false;
+  button.textContent = "Akte speichern";
+  if (result.error) {
+    showToast(result.error.code === "23505" ? "Diese Aktennummer wird bereits verwendet." : "Die Physiologie-Akte konnte nicht gespeichert werden.");
+    return;
+  }
+  $("#physiologyRecordDialog").close();
+  await loadPhysiologyRecords();
+  await openPhysiologyRecord(result.data.id);
+  showToast(id ? "Physiologie-Akte wurde aktualisiert." : "Physiologie-Akte wurde angelegt.");
+});
+
+$("#physiologySessionForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const sessionForm = event.currentTarget;
+  if (!sessionForm.reportValidity() || !currentPhysiologyRecord || currentPhysiologyRecord.status === "closed") return;
+  const id = $("#physiologySessionId").value;
+  const values = {
+    record_id: currentPhysiologyRecord.id,
+    session_at: new Date($("#physiologySessionAt").value).toISOString(),
+    treating_staff: $("#physiologySessionStaff").value.trim(),
+    reason: $("#physiologySessionReason").value.trim(),
+    notes: $("#physiologySessionNotes").value.trim(),
+    assessment: $("#physiologySessionAssessment").value.trim() || null,
+    measures: $("#physiologySessionMeasures").value.trim() || null,
+    next_appointment: $("#physiologyNextAppointment").value ? new Date($("#physiologyNextAppointment").value).toISOString() : null,
+    internal_note: $("#physiologyInternalNote").value.trim() || null
+  };
+  const button = $("#savePhysiologySessionBtn");
+  button.disabled = true;
+  button.textContent = "Wird gespeichert …";
+  const result = id
+    ? await db.from("physiology_sessions").update(values).eq("id", id)
+    : await db.from("physiology_sessions").insert({ id: createUuid(), ...values });
+  button.disabled = false;
+  button.textContent = "Sitzung speichern";
+  if (result.error) {
+    showToast("Die Sitzung konnte nicht gespeichert werden.");
+    return;
+  }
+  $("#physiologySessionDialog").close();
+  await loadPhysiologySessions();
+  showToast(id ? "Sitzung wurde aktualisiert." : "Sitzung wurde dokumentiert.");
+});
+
 $("#deceasedForm").addEventListener("submit", async event => {
   event.preventDefault();
   setDeceasedChamberState();
@@ -2150,6 +2436,7 @@ $("#createUserForm").addEventListener("submit", async event => {
       canDeleteHistory: $("#newUserCanDeleteHistory").checked,
       canManageUsers: $("#newUserCanManageUsers").checked,
       canAccessPsychology: $("#newUserCanAccessPsychology").checked,
+      canAccessPhysiology: $("#newUserCanAccessPhysiology").checked,
       canAccessFireInvestigation: $("#newUserCanAccessFireInvestigation").checked
     });
     createForm.reset();
@@ -2207,6 +2494,7 @@ $("#navBulletinBtn").addEventListener("click", showBulletinBoard);
 $("#navLabBtn").addEventListener("click", showLabRequests);
 $("#navDeceasedBtn").addEventListener("click", showDeceasedOverview);
 $("#navPsychologyBtn").addEventListener("click", showPsychologyOverview);
+$("#navPhysiologyBtn").addEventListener("click", showPhysiologyOverview);
 $("#navFireInvestigationBtn").addEventListener("click", showFireInvestigationOverview);
 $("#navUsersBtn").addEventListener("click", showUserManagement);
 $("#navCollapseBtn").addEventListener("click", () => setNavCollapsed(!$("#appNav").classList.contains("collapsed")));
@@ -2221,6 +2509,11 @@ $("#backToPsychologyBtn").addEventListener("click", showPsychologyOverview);
 $("#editPsychologyRecordBtn").addEventListener("click", () => openPsychologyRecordDialog(currentPsychologyRecord?.id || ""));
 $("#newPsychologySessionBtn").addEventListener("click", () => openPsychologySessionDialog());
 $("#deletePsychologyRecordBtn").addEventListener("click", deleteCurrentPsychologyRecord);
+$("#newPhysiologyRecordBtn").addEventListener("click", () => openPhysiologyRecordDialog());
+$("#backToPhysiologyBtn").addEventListener("click", showPhysiologyOverview);
+$("#editPhysiologyRecordBtn").addEventListener("click", () => openPhysiologyRecordDialog(currentPhysiologyRecord?.id || ""));
+$("#newPhysiologySessionBtn").addEventListener("click", () => openPhysiologySessionDialog());
+$("#deletePhysiologyRecordBtn").addEventListener("click", deleteCurrentPhysiologyRecord);
 $("#newFireInvestigationBtn").addEventListener("click", () => openFireInvestigationDialog());
 $("#backToFireInvestigationsBtn").addEventListener("click", showFireInvestigationOverview);
 $("#editFireInvestigationBtn").addEventListener("click", () => openFireInvestigationDialog(currentFireInvestigation?.id || ""));
@@ -2238,6 +2531,10 @@ $("#closePsychologyRecordDialogBtn").addEventListener("click", () => $("#psychol
 $("#cancelPsychologyRecordBtn").addEventListener("click", () => $("#psychologyRecordDialog").close());
 $("#closePsychologySessionDialogBtn").addEventListener("click", () => $("#psychologySessionDialog").close());
 $("#cancelPsychologySessionBtn").addEventListener("click", () => $("#psychologySessionDialog").close());
+$("#closePhysiologyRecordDialogBtn").addEventListener("click", () => $("#physiologyRecordDialog").close());
+$("#cancelPhysiologyRecordBtn").addEventListener("click", () => $("#physiologyRecordDialog").close());
+$("#closePhysiologySessionDialogBtn").addEventListener("click", () => $("#physiologySessionDialog").close());
+$("#cancelPhysiologySessionBtn").addEventListener("click", () => $("#physiologySessionDialog").close());
 [["#closeFireInvestigationDialogBtn", "#fireInvestigationDialog"], ["#cancelFireInvestigationBtn", "#fireInvestigationDialog"], ["#closeFirePersonDialogBtn", "#firePersonDialog"], ["#cancelFirePersonBtn", "#firePersonDialog"], ["#closeFireEvidenceDialogBtn", "#fireEvidenceDialog"], ["#cancelFireEvidenceBtn", "#fireEvidenceDialog"], ["#closeFireLogDialogBtn", "#fireLogDialog"], ["#cancelFireLogBtn", "#fireLogDialog"]].forEach(([button, target]) => $(button).addEventListener("click", () => $(target).close()));
 $("#closePasswordDialogBtn").addEventListener("click", () => $("#passwordDialog").close());
 $("#cancelPasswordBtn").addEventListener("click", () => $("#passwordDialog").close());
@@ -2311,8 +2608,11 @@ $("#deceasedChamberOccupied").addEventListener("change", setDeceasedChamberState
 $("#deceasedAutopsyReport").addEventListener("change", setAutopsyReportState);
 $("#psychologySearch").addEventListener("input", renderPsychologyRecords);
 $("#psychologyStatusFilter").addEventListener("change", renderPsychologyRecords);
+$("#physiologySearch").addEventListener("input", renderPhysiologyRecords);
+$("#physiologyStatusFilter").addEventListener("change", renderPhysiologyRecords);
 $("#userSearch").addEventListener("input", renderManagedUsers);
 $("#psychologyRecordStatus").addEventListener("change", setPsychologyCloseWarning);
+$("#physiologyRecordStatus").addEventListener("change", setPhysiologyCloseWarning);
 $("#fireSearch").addEventListener("input", renderFireInvestigations);
 $("#fireStatusFilter").addEventListener("change", renderFireInvestigations);
 $("#fireCauseFilter").addEventListener("change", renderFireInvestigations);
@@ -2325,6 +2625,8 @@ $("#deceasedDialog").addEventListener("click", event => { if (event.target === $
 $("#passwordDialog").addEventListener("click", event => { if (event.target === $("#passwordDialog")) $("#passwordDialog").close(); });
 $("#psychologyRecordDialog").addEventListener("click", event => { if (event.target === $("#psychologyRecordDialog")) $("#psychologyRecordDialog").close(); });
 $("#psychologySessionDialog").addEventListener("click", event => { if (event.target === $("#psychologySessionDialog")) $("#psychologySessionDialog").close(); });
+$("#physiologyRecordDialog").addEventListener("click", event => { if (event.target === $("#physiologyRecordDialog")) $("#physiologyRecordDialog").close(); });
+$("#physiologySessionDialog").addEventListener("click", event => { if (event.target === $("#physiologySessionDialog")) $("#physiologySessionDialog").close(); });
 ["#fireInvestigationDialog", "#firePersonDialog", "#fireEvidenceDialog", "#fireLogDialog"].forEach(selector => $(selector).addEventListener("click", event => { if (event.target === $(selector)) $(selector).close(); }));
 
 initialize();

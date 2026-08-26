@@ -8,6 +8,7 @@ create table if not exists public.mci_members (
   can_delete_history boolean not null default false,
   can_manage_users boolean not null default false,
   can_access_psychology boolean not null default false,
+  can_access_physiology boolean not null default false,
   can_access_fire_investigation boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -15,6 +16,7 @@ create table if not exists public.mci_members (
 alter table public.mci_members add column if not exists can_delete_history boolean not null default false;
 alter table public.mci_members add column if not exists can_manage_users boolean not null default false;
 alter table public.mci_members add column if not exists can_access_psychology boolean not null default false;
+alter table public.mci_members add column if not exists can_access_physiology boolean not null default false;
 alter table public.mci_members add column if not exists can_access_fire_investigation boolean not null default false;
 
 -- Bei der erstmaligen Migration erhält das älteste freigegebene Konto die Benutzerverwaltung.
@@ -180,6 +182,45 @@ create table if not exists public.psychology_sessions (
   updated_at timestamptz
 );
 
+create table if not exists public.physiology_records (
+  id uuid primary key,
+  file_number text not null,
+  patient_name text not null,
+  birth_date date,
+  phone text,
+  treating_staff text not null,
+  general_notes text,
+  status text not null default 'active' check (status in ('active', 'paused', 'closed')),
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz,
+  closed_by uuid references auth.users(id),
+  closed_by_name text,
+  closed_at timestamptz
+);
+
+create table if not exists public.physiology_sessions (
+  id uuid primary key,
+  record_id uuid not null references public.physiology_records(id) on delete restrict,
+  session_at timestamptz not null,
+  treating_staff text not null,
+  reason text not null,
+  notes text not null,
+  assessment text,
+  measures text,
+  next_appointment timestamptz,
+  internal_note text,
+  created_by uuid not null references auth.users(id),
+  created_by_name text not null,
+  created_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  updated_by_name text,
+  updated_at timestamptz
+);
+
 create table if not exists public.fire_investigations (
   id uuid primary key,
   case_number text not null,
@@ -325,6 +366,9 @@ on public.deceased_records (chamber_number) where chamber_occupied;
 create unique index if not exists psychology_records_file_number_idx on public.psychology_records (lower(file_number));
 create index if not exists psychology_records_status_updated_idx on public.psychology_records (status, updated_at desc nulls last, created_at desc);
 create index if not exists psychology_sessions_record_date_idx on public.psychology_sessions (record_id, session_at desc);
+create unique index if not exists physiology_records_file_number_idx on public.physiology_records (lower(file_number));
+create index if not exists physiology_records_status_updated_idx on public.physiology_records (status, updated_at desc nulls last, created_at desc);
+create index if not exists physiology_sessions_record_date_idx on public.physiology_sessions (record_id, session_at desc);
 create unique index if not exists fire_investigations_case_number_idx on public.fire_investigations (lower(case_number));
 create index if not exists fire_investigations_status_date_idx on public.fire_investigations (status, incident_date desc);
 create index if not exists fire_people_investigation_idx on public.fire_investigation_people (investigation_id, created_at);
@@ -563,6 +607,64 @@ begin
 end;
 $$;
 
+create or replace function public.protect_physiology_record()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  actor_name := coalesce(actor_name, 'Unbekannt');
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid(); new.created_by_name := actor_name; new.created_at := now();
+    new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
+    new.closed_by := null; new.closed_by_name := null; new.closed_at := null;
+    if new.status = 'closed' then raise exception 'Neue Akten können nicht abgeschlossen angelegt werden.'; end if;
+    return new;
+  end if;
+  if old.status = 'closed' then raise exception 'Abgeschlossene Physiologie-Akten sind schreibgeschützt.'; end if;
+  new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  new.updated_by := auth.uid(); new.updated_by_name := actor_name; new.updated_at := now();
+  if new.status = 'closed' then
+    new.closed_by := auth.uid(); new.closed_by_name := actor_name; new.closed_at := now();
+  else
+    new.closed_by := null; new.closed_by_name := null; new.closed_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_physiology_session()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+  target_record uuid;
+begin
+  target_record := case when tg_op = 'DELETE' then old.record_id else new.record_id end;
+  if not exists (select 1 from public.physiology_records where id = target_record and status <> 'closed') then
+    raise exception 'Sitzungen können nur in aktiven oder pausierten Akten geändert werden.';
+  end if;
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  actor_name := coalesce(actor_name, 'Unbekannt');
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid(); new.created_by_name := actor_name; new.created_at := now();
+    new.updated_by := null; new.updated_by_name := null; new.updated_at := null;
+    return new;
+  end if;
+  new.record_id := old.record_id;
+  new.created_by := old.created_by; new.created_by_name := old.created_by_name; new.created_at := old.created_at;
+  new.updated_by := auth.uid(); new.updated_by_name := actor_name; new.updated_at := now();
+  return new;
+end;
+$$;
+
 create or replace function public.protect_fire_investigation()
 returns trigger
 language plpgsql
@@ -711,6 +813,12 @@ begin
       end if;
       delete from public.psychology_sessions where record_id = p_entry_id;
       delete from public.psychology_records where id = p_entry_id and status = 'closed';
+    when 'physiology' then
+      if not exists (select 1 from public.physiology_records where id = p_entry_id and status = 'closed') then
+        raise exception 'Abgeschlossene Physiologie-Akte nicht gefunden.';
+      end if;
+      delete from public.physiology_sessions where record_id = p_entry_id;
+      delete from public.physiology_records where id = p_entry_id and status = 'closed';
     when 'fire_investigation' then
       if not exists (select 1 from public.fire_investigations where id = p_entry_id and status = 'closed') then
         raise exception 'Abgeschlossene Brandermittlungsakte nicht gefunden.';
@@ -785,6 +893,14 @@ drop trigger if exists psychology_sessions_protection_trigger on public.psycholo
 create trigger psychology_sessions_protection_trigger before insert or update on public.psychology_sessions
 for each row execute function public.protect_psychology_session();
 
+drop trigger if exists physiology_records_protection_trigger on public.physiology_records;
+create trigger physiology_records_protection_trigger before insert or update on public.physiology_records
+for each row execute function public.protect_physiology_record();
+
+drop trigger if exists physiology_sessions_protection_trigger on public.physiology_sessions;
+create trigger physiology_sessions_protection_trigger before insert or update on public.physiology_sessions
+for each row execute function public.protect_physiology_session();
+
 drop trigger if exists fire_investigations_protection_trigger on public.fire_investigations;
 create trigger fire_investigations_protection_trigger before insert or update on public.fire_investigations
 for each row execute function public.protect_fire_investigation();
@@ -813,6 +929,8 @@ revoke execute on function public.protect_lab_request() from public, anon, authe
 revoke execute on function public.protect_deceased_record() from public, anon, authenticated;
 revoke execute on function public.protect_psychology_record() from public, anon, authenticated;
 revoke execute on function public.protect_psychology_session() from public, anon, authenticated;
+revoke execute on function public.protect_physiology_record() from public, anon, authenticated;
+revoke execute on function public.protect_physiology_session() from public, anon, authenticated;
 revoke execute on function public.protect_fire_investigation() from public, anon, authenticated;
 revoke execute on function public.protect_fire_investigation_child() from public, anon, authenticated;
 revoke execute on function public.protect_fire_investigation_log() from public, anon, authenticated;
@@ -830,6 +948,8 @@ alter table public.lab_requests enable row level security;
 alter table public.deceased_records enable row level security;
 alter table public.psychology_records enable row level security;
 alter table public.psychology_sessions enable row level security;
+alter table public.physiology_records enable row level security;
+alter table public.physiology_sessions enable row level security;
 alter table public.fire_investigations enable row level security;
 alter table public.fire_investigation_people enable row level security;
 alter table public.fire_investigation_evidence enable row level security;
@@ -845,6 +965,8 @@ revoke all on public.lab_requests from anon, authenticated;
 revoke all on public.deceased_records from anon, authenticated;
 revoke all on public.psychology_records from anon, authenticated;
 revoke all on public.psychology_sessions from anon, authenticated;
+revoke all on public.physiology_records from anon, authenticated;
+revoke all on public.physiology_sessions from anon, authenticated;
 revoke all on public.fire_investigations from anon, authenticated;
 revoke all on public.fire_investigation_people from anon, authenticated;
 revoke all on public.fire_investigation_evidence from anon, authenticated;
@@ -859,6 +981,8 @@ grant select, insert, update on public.lab_requests to authenticated;
 grant select, insert, update on public.deceased_records to authenticated;
 grant select, insert, update on public.psychology_records to authenticated;
 grant select, insert, update on public.psychology_sessions to authenticated;
+grant select, insert, update on public.physiology_records to authenticated;
+grant select, insert, update on public.physiology_sessions to authenticated;
 grant select, insert, update on public.fire_investigations to authenticated;
 grant select, insert, update on public.fire_investigation_people to authenticated;
 grant select, insert, update on public.fire_investigation_evidence to authenticated;
@@ -1008,6 +1132,64 @@ with check (
   updated_by = auth.uid()
   and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_psychology)
   and exists (select 1 from public.psychology_records r where r.id = record_id and r.status <> 'closed')
+);
+
+drop policy if exists "Physiologie liest Akten" on public.physiology_records;
+create policy "Physiologie liest Akten"
+on public.physiology_records for select to authenticated
+using (exists (
+  select 1 from public.mci_members m
+  where m.user_id = auth.uid() and m.can_access_physiology
+));
+
+drop policy if exists "Physiologie erstellt Akten" on public.physiology_records;
+create policy "Physiologie erstellt Akten"
+on public.physiology_records for insert to authenticated
+with check (
+  created_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_physiology)
+);
+
+drop policy if exists "Physiologie bearbeitet Akten" on public.physiology_records;
+create policy "Physiologie bearbeitet Akten"
+on public.physiology_records for update to authenticated
+using (
+  status <> 'closed'
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_physiology)
+)
+with check (
+  updated_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_physiology)
+);
+
+drop policy if exists "Physiologie liest Sitzungen" on public.physiology_sessions;
+create policy "Physiologie liest Sitzungen"
+on public.physiology_sessions for select to authenticated
+using (exists (
+  select 1 from public.mci_members m
+  where m.user_id = auth.uid() and m.can_access_physiology
+));
+
+drop policy if exists "Physiologie erstellt Sitzungen" on public.physiology_sessions;
+create policy "Physiologie erstellt Sitzungen"
+on public.physiology_sessions for insert to authenticated
+with check (
+  created_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_physiology)
+  and exists (select 1 from public.physiology_records r where r.id = record_id and r.status <> 'closed')
+);
+
+drop policy if exists "Physiologie bearbeitet Sitzungen" on public.physiology_sessions;
+create policy "Physiologie bearbeitet Sitzungen"
+on public.physiology_sessions for update to authenticated
+using (
+  exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_physiology)
+  and exists (select 1 from public.physiology_records r where r.id = record_id and r.status <> 'closed')
+)
+with check (
+  updated_by = auth.uid()
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid() and m.can_access_physiology)
+  and exists (select 1 from public.physiology_records r where r.id = record_id and r.status <> 'closed')
 );
 
 drop policy if exists "Fire Investigation liest Akten" on public.fire_investigations;
@@ -1218,6 +1400,18 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'psychology_sessions'
   ) then
     alter publication supabase_realtime add table public.psychology_sessions;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'physiology_records'
+  ) then
+    alter publication supabase_realtime add table public.physiology_records;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'physiology_sessions'
+  ) then
+    alter publication supabase_realtime add table public.physiology_sessions;
   end if;
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'fire_investigations') then
     alter publication supabase_realtime add table public.fire_investigations;

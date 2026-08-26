@@ -206,7 +206,7 @@ dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 34
 .psychology-session-content p { color: #d7dee8; line-height: 1.6; }
 .psychology-session-content .internal-note { border: 1px solid rgba(240,180,41,.28); background: rgba(240,180,41,.06); }
 .psychology-session-card footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 14px; padding-top: 12px; color: var(--muted); border-top: 1px solid var(--border); font-size: .72rem; }
-#psychologyRecordDialog, #psychologySessionDialog { width: min(860px, calc(100% - 24px)); }
+#psychologyRecordDialog, #psychologySessionDialog, #physiologyRecordDialog, #physiologySessionDialog { width: min(860px, calc(100% - 24px)); }
 .fire-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .fire-toolbar { margin-bottom: 18px; }
 .fire-status { display: inline-flex; padding: 5px 9px; border-radius: 999px; color: #d8e0eb; background: rgba(141,150,165,.14); font-size: .68rem; font-weight: 850; text-transform: uppercase; }
