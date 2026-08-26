@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101722">
   <meta name="description" content="SAFMS digital incident reports">
   <title>MCI Board</title>
-  <link rel="stylesheet" href="styles.css?v=34">
+  <link rel="stylesheet" href="styles.css?v=35">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -232,6 +232,7 @@
     </section>
     <section class="history-section deceased-history-section">
       <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Abgeschlossene Einträge</h2></div><span id="deceasedHistoryCount" class="history-count">0</span></div>
+      <div class="history-controls" data-history-controls="deceased"><input type="search" data-history-search placeholder="Historie durchsuchen …"><select data-history-range><option value="30">Letzte 30 Tage</option><option value="7">Letzte 7 Tage</option><option value="year">Dieses Jahr</option><option value="all">Gesamter Zeitraum</option></select><div class="history-pagination"><button type="button" data-history-prev>← Zurück</button><span data-history-page-info></span><button type="button" data-history-next>Weiter →</button></div></div>
       <div class="table-wrap"><table class="bulletin-table deceased-table history-table"><thead><tr><th>Patient</th><th>Todesdatum</th><th>Vermutlicher Todesumstand</th><th>Ansprechpartner / Informationen</th><th>Beisetzung</th><th>Abgeschlossen von</th><th>Abgeschlossen am</th><th></th></tr></thead><tbody id="deceasedHistoryBody"></tbody></table></div>
     </section>
   </main>
@@ -273,6 +274,7 @@
     </section>
     <section class="history-section">
       <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Erledigte Requests</h2></div><span id="closedLabCount" class="history-count">0</span></div>
+      <div class="history-controls" data-history-controls="lab"><input type="search" data-history-search placeholder="Historie durchsuchen …"><select data-history-range><option value="30">Letzte 30 Tage</option><option value="7">Letzte 7 Tage</option><option value="year">Dieses Jahr</option><option value="all">Gesamter Zeitraum</option></select><div class="history-pagination"><button type="button" data-history-prev>← Zurück</button><span data-history-page-info></span><button type="button" data-history-next>Weiter →</button></div></div>
       <div class="table-wrap"><table class="bulletin-table history-table"><thead><tr><th>Patient</th><th>Telefonnummer</th><th>Probennummer</th><th>Hinweis</th><th>Erstellt von</th><th>Erledigt von</th><th>Erledigt am</th><th></th></tr></thead><tbody id="closedLabBody"></tbody></table></div>
     </section>
   </main>
@@ -288,6 +290,7 @@
     </section>
     <section class="history-section">
       <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Erledigte Einträge</h2></div><span id="closedBulletinCount" class="history-count">0</span></div>
+      <div class="history-controls" data-history-controls="bulletin"><input type="search" data-history-search placeholder="Historie durchsuchen …"><select data-history-range><option value="30">Letzte 30 Tage</option><option value="7">Letzte 7 Tage</option><option value="year">Dieses Jahr</option><option value="all">Gesamter Zeitraum</option></select><div class="history-pagination"><button type="button" data-history-prev>← Zurück</button><span data-history-page-info></span><button type="button" data-history-next>Weiter →</button></div></div>
       <div class="table-wrap"><table class="bulletin-table history-table"><thead><tr><th>Patient</th><th>Fachbereich</th><th>Telefonnummer</th><th>Anliegen / Vorfall</th><th>Bearbeitet durch</th><th>Erstellt von</th><th>Erledigt von</th><th>Erledigt am</th><th></th></tr></thead><tbody id="closedBulletinBody"></tbody></table></div>
     </section>
   </main>
@@ -319,6 +322,7 @@
     <section id="activeIncidentGrid" class="incident-grid" aria-live="polite"></section>
     <section class="history-section">
       <div class="history-heading"><div><p class="eyebrow">Archiv</p><h2>Abgeschlossene MCIs</h2></div><span id="historyCount" class="history-count">0</span></div>
+      <div class="history-controls" data-history-controls="incidents"><input type="search" data-history-search placeholder="MCI-Historie durchsuchen …"><select data-history-range><option value="30">Letzte 30 Tage</option><option value="7">Letzte 7 Tage</option><option value="year">Dieses Jahr</option><option value="all">Gesamter Zeitraum</option></select><div class="history-pagination"><button type="button" data-history-prev>← Zurück</button><span data-history-page-info></span><button type="button" data-history-next>Weiter →</button></div></div>
       <section id="closedIncidentGrid" class="incident-grid" aria-live="polite"></section>
     </section>
   </main>
@@ -343,6 +347,7 @@
     <section id="normalPatientGrid" class="patient-grid" aria-live="polite"></section>
     <section class="history-section">
       <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Abgeschlossene Behandlungen</h2></div><span id="normalPatientHistoryCount" class="history-count">0</span></div>
+      <div class="history-controls" data-history-controls="normal"><input type="search" data-history-search placeholder="Behandlungshistorie durchsuchen …"><select data-history-range><option value="30">Letzte 30 Tage</option><option value="7">Letzte 7 Tage</option><option value="year">Dieses Jahr</option><option value="all">Gesamter Zeitraum</option></select><div class="history-pagination"><button type="button" data-history-prev>← Zurück</button><span data-history-page-info></span><button type="button" data-history-next>Weiter →</button></div></div>
       <section id="normalPatientHistoryGrid" class="patient-grid" aria-live="polite"></section>
     </section>
   </main>
@@ -540,6 +545,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=36"></script>
 </body>
 </html>

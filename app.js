@@ -2,6 +2,18 @@ const STORAGE_KEY = "mci-board-patients-v1";
 const LEGACY_STORAGE_KEY = ["man", "v-board-patients-v1"].join("");
 const MIGRATION_KEY = "mci-board-supabase-migration-v1";
 const NAV_COLLAPSED_KEY = "mci-board-nav-collapsed";
+const HISTORY_PAGE_SIZE = 20;
+const HISTORY_MODULES = ["incidents", "normal", "bulletin", "lab", "deceased"];
+const historyStates = Object.fromEntries(HISTORY_MODULES.map(module => {
+  const params = new URLSearchParams(location.search);
+  const range = params.get(`history_${module}_range`);
+  return [module, {
+    page: Math.max(0, Number(params.get(`history_${module}_page`)) - 1 || 0),
+    query: params.get(`history_${module}_q`) || "",
+    range: ["7", "30", "year", "all"].includes(range) ? range : "30",
+    total: 0
+  }];
+}));
 const triageLabels = {
   red: "SK I · Rot",
   yellow: "SK II · Gelb",
@@ -52,6 +64,58 @@ let patientDialogMode = "mci";
 const $ = (selector) => document.querySelector(selector);
 const dialog = $("#patientDialog");
 const form = $("#patientForm");
+
+function historySince(range) {
+  if (range === "all") return "";
+  const date = new Date();
+  if (range === "year") date.setMonth(0, 1); else date.setDate(date.getDate() - Number(range || 30));
+  date.setHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+function applyHistoryFilters(query, module, dateColumn, searchColumns = []) {
+  const state = historyStates[module];
+  const term = state.query.trim().replace(/[,()%"\\]/g, " ").replace(/\s+/g, " ");
+  const since = historySince(state.range);
+  if (term && searchColumns.length) query = query.or(searchColumns.map(column => `${column}.ilike.%${term}%`).join(","));
+  if (since) query = query.gte(dateColumn, since);
+  const from = state.page * HISTORY_PAGE_SIZE;
+  return query.range(from, from + HISTORY_PAGE_SIZE - 1);
+}
+
+function syncHistoryUrl(module) {
+  const state = historyStates[module];
+  const url = new URL(location.href);
+  const values = { page: state.page + 1, q: state.query, range: state.range };
+  Object.entries(values).forEach(([key, value]) => {
+    const name = `history_${module}_${key}`;
+    if (!value || (key === "page" && value === 1) || (key === "range" && value === "30")) url.searchParams.delete(name);
+    else url.searchParams.set(name, String(value));
+  });
+  history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function renderHistoryControls(module) {
+  const state = historyStates[module];
+  const controls = document.querySelector(`[data-history-controls="${module}"]`);
+  if (!controls) return;
+  const pages = Math.max(1, Math.ceil(state.total / HISTORY_PAGE_SIZE));
+  if (state.page >= pages) {
+    state.page = pages - 1;
+    syncHistoryUrl(module);
+    reloadHistory(module);
+    return;
+  }
+  controls.querySelector("[data-history-search]").value = state.query;
+  controls.querySelector("[data-history-range]").value = state.range;
+  controls.querySelector("[data-history-page-info]").textContent = `${state.page + 1} / ${pages}`;
+  controls.querySelector("[data-history-prev]").disabled = state.page === 0;
+  controls.querySelector("[data-history-next]").disabled = state.page + 1 >= pages;
+}
+
+function reloadHistory(module) {
+  ({ incidents: loadIncidents, normal: loadNormalPatients, bulletin: loadBulletinEntries, lab: loadLabEntries, deceased: loadDeceasedRecords })[module]?.();
+}
 
 function setNavCollapsed(collapsed) {
   const nav = $("#appNav");
@@ -191,20 +255,26 @@ function setAuthError(message) {
 
 async function loadIncidents() {
   if (!db || !currentUser) return;
-  const { data, error } = await db
-    .from("incidents")
-    .select("id, title, location, scene_lead, description, status, started_at, closed_at, created_at, updated_at")
-    .order("started_at", { ascending: false });
-  if (error) {
+  const columns = "id, title, location, scene_lead, description, status, started_at, closed_at, created_at, updated_at";
+  const activeRequest = db.from("incidents").select(columns).eq("status", "active").order("started_at", { ascending: false });
+  let historyRequest = db.from("incidents").select(columns, { count: "exact" }).eq("status", "closed").order("closed_at", { ascending: false });
+  historyRequest = applyHistoryFilters(historyRequest, "incidents", "closed_at", ["title", "location", "scene_lead"]);
+  const [activeResult, historyResult] = await Promise.all([activeRequest, historyRequest]);
+  if (activeResult.error || historyResult.error) {
     showToast("MCI-Liste konnte nicht geladen werden.");
     return;
   }
-  const { data: patientRefs } = await db.from("patients").select("incident_id");
+  historyStates.incidents.total = historyResult.count || 0;
+  const loadedIncidents = [...(activeResult.data || []), ...(historyResult.data || [])];
+  const loadedIncidentIds = loadedIncidents.map(item => item.id);
+  const { data: patientRefs } = loadedIncidentIds.length
+    ? await db.from("patients").select("incident_id").in("incident_id", loadedIncidentIds)
+    : { data: [] };
   const counts = (patientRefs || []).reduce((result, row) => {
     result[row.incident_id] = (result[row.incident_id] || 0) + 1;
     return result;
   }, {});
-  incidents = (data || []).map(incident => ({ ...incident, patientCount: counts[incident.id] || 0 }));
+  incidents = loadedIncidents.map(incident => ({ ...incident, patientCount: counts[incident.id] || 0 }));
   if (currentIncident) currentIncident = incidents.find(item => item.id === currentIncident.id) || currentIncident;
   renderIncidents();
 }
@@ -294,7 +364,8 @@ function renderIncidents() {
   $("#closedIncidentGrid").innerHTML = closed.length
     ? closed.map(incidentCard).join("")
     : `<div class="incident-empty">Noch keine abgeschlossenen MCIs vorhanden.</div>`;
-  $("#historyCount").textContent = closed.length;
+  $("#historyCount").textContent = historyStates.incidents.total;
+  renderHistoryControls("incidents");
   document.querySelectorAll("[data-incident-id]").forEach(button => {
     button.addEventListener("click", () => openIncident(button.dataset.incidentId));
   });
@@ -464,13 +535,18 @@ async function showNormalPatientOverview() {
 async function loadNormalPatients() {
   if (!db || !currentUser) return;
   $("#saveState").textContent = "Synchronisiere …";
-  const { data, error } = await db.from("normal_patient_handoffs").select("id, data, status, created_at, updated_at, closed_at, closed_by_name").order("updated_at", { ascending: false });
-  if (error) {
+  const columns = "id, data, status, created_at, updated_at, closed_at, closed_by_name";
+  const activeRequest = db.from("normal_patient_handoffs").select(columns).eq("status", "active").order("updated_at", { ascending: false });
+  let historyRequest = db.from("normal_patient_handoffs").select(columns, { count: "exact" }).eq("status", "closed").order("closed_at", { ascending: false });
+  historyRequest = applyHistoryFilters(historyRequest, "normal", "closed_at", ["search_text"]);
+  const [activeResult, historyResult] = await Promise.all([activeRequest, historyRequest]);
+  if (activeResult.error || historyResult.error) {
     $("#saveState").textContent = "Synchronisierung fehlgeschlagen";
     showToast("Patientenübergaben konnten nicht geladen werden. Bitte das aktualisierte SQL-Skript ausführen.");
     return;
   }
-  normalPatients = (data || []).map(row => ({
+  historyStates.normal.total = historyResult.count || 0;
+  normalPatients = [...(activeResult.data || []), ...(historyResult.data || [])].map(row => ({
     ...(row.data && typeof row.data === "object" ? row.data : {}),
     id: row.id,
     status: row.status || "active",
@@ -495,7 +571,8 @@ function renderNormalPatients() {
   $("#normalCountAll").textContent = active.length;
   $("#normalCountSurgery").textContent = active.filter(patient => patient.surgery).length;
   $("#normalCountFollowUp").textContent = active.filter(patient => patient.followUp).length;
-  $("#normalPatientHistoryCount").textContent = closed.length;
+  $("#normalPatientHistoryCount").textContent = historyStates.normal.total;
+  renderHistoryControls("normal");
   $("#normalPatientsEmpty").classList.toggle("hidden", active.length > 0);
   $("#normalPatientGrid").classList.toggle("hidden", active.length === 0);
   $("#normalPatientGrid").innerHTML = visible.length ? visible.map(normalPatientCard).join("") : `<div class="no-results">Keine passenden Patientenübergaben gefunden.</div>`;
@@ -662,11 +739,14 @@ function openBulletinDialog(id = "") {
 
 async function loadBulletinEntries() {
   if (!db || !currentUser) return;
-  const { data, error } = await db
-    .from("bulletin_entries")
-    .select("id, patient_name, phone, department, handled_by, concern, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at")
-    .order("created_at", { ascending: false });
-  bulletinEntries = error ? [] : (data || []);
+  const columns = "id, patient_name, phone, department, handled_by, concern, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at";
+  const activeRequest = db.from("bulletin_entries").select(columns).eq("status", "open").order("created_at", { ascending: false });
+  let historyRequest = db.from("bulletin_entries").select(columns, { count: "exact" }).eq("status", "done").order("completed_at", { ascending: false });
+  historyRequest = applyHistoryFilters(historyRequest, "bulletin", "completed_at", ["patient_name", "department", "handled_by", "concern"]);
+  const [activeResult, historyResult] = await Promise.all([activeRequest, historyRequest]);
+  const error = activeResult.error || historyResult.error;
+  bulletinEntries = error ? [] : [...(activeResult.data || []), ...(historyResult.data || [])];
+  historyStates.bulletin.total = historyResult.count || 0;
   if (error) showToast("Einträge des Schwarzen Bretts konnten nicht geladen werden.");
   renderBulletinEntries();
 }
@@ -675,7 +755,8 @@ function renderBulletinEntries() {
   const openEntries = bulletinEntries.filter(entry => entry.status === "open");
   const closedEntries = bulletinEntries.filter(entry => entry.status === "done").sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
   $("#openBulletinCount").textContent = openEntries.length;
-  $("#closedBulletinCount").textContent = closedEntries.length;
+  $("#closedBulletinCount").textContent = historyStates.bulletin.total;
+  renderHistoryControls("bulletin");
   $("#openBulletinBody").innerHTML = openEntries.length ? openEntries.map(openBulletinRow).join("") : `<tr><td class="table-empty" colspan="8">Keine offenen Einträge vorhanden.</td></tr>`;
   $("#closedBulletinBody").innerHTML = closedEntries.length ? closedEntries.map(closedBulletinRow).join("") : `<tr><td class="table-empty" colspan="9">Noch keine erledigten Einträge vorhanden.</td></tr>`;
   document.querySelectorAll("[data-complete-bulletin]").forEach(button => button.addEventListener("click", () => completeBulletinEntry(button.dataset.completeBulletin)));
@@ -1121,11 +1202,14 @@ function openLabDialog(id = "") {
 
 async function loadLabEntries() {
   if (!db || !currentUser) return;
-  const { data, error } = await db
-    .from("lab_requests")
-    .select("id, patient_name, phone, sample_number, note, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at")
-    .order("created_at", { ascending: false });
-  labEntries = error ? [] : (data || []);
+  const columns = "id, patient_name, phone, sample_number, note, status, created_by_name, created_at, updated_by_name, updated_at, completed_by_name, completed_at";
+  const activeRequest = db.from("lab_requests").select(columns).eq("status", "open").order("created_at", { ascending: false });
+  let historyRequest = db.from("lab_requests").select(columns, { count: "exact" }).eq("status", "done").order("completed_at", { ascending: false });
+  historyRequest = applyHistoryFilters(historyRequest, "lab", "completed_at", ["patient_name", "phone", "sample_number", "note"]);
+  const [activeResult, historyResult] = await Promise.all([activeRequest, historyRequest]);
+  const error = activeResult.error || historyResult.error;
+  labEntries = error ? [] : [...(activeResult.data || []), ...(historyResult.data || [])];
+  historyStates.lab.total = historyResult.count || 0;
   if (error) showToast("Labor Requests konnten nicht geladen werden.");
   renderLabEntries();
 }
@@ -1134,7 +1218,8 @@ function renderLabEntries() {
   const openEntries = labEntries.filter(entry => entry.status === "open");
   const closedEntries = labEntries.filter(entry => entry.status === "done").sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
   $("#openLabCount").textContent = openEntries.length;
-  $("#closedLabCount").textContent = closedEntries.length;
+  $("#closedLabCount").textContent = historyStates.lab.total;
+  renderHistoryControls("lab");
   $("#openLabBody").innerHTML = openEntries.length ? openEntries.map(openLabRow).join("") : `<tr><td class="table-empty" colspan="7">Keine offenen Labor Requests vorhanden.</td></tr>`;
   $("#closedLabBody").innerHTML = closedEntries.length ? closedEntries.map(closedLabRow).join("") : `<tr><td class="table-empty" colspan="8">Noch keine erledigten Labor Requests vorhanden.</td></tr>`;
   document.querySelectorAll("[data-complete-lab]").forEach(button => button.addEventListener("click", () => completeLabEntry(button.dataset.completeLab)));
@@ -1248,11 +1333,14 @@ function openDeceasedDialog(id = "", preferredChamber = null) {
 
 async function loadDeceasedRecords() {
   if (!db || !currentUser) return;
-  const { data, error } = await db
-    .from("deceased_records")
-    .select("id, patient_name, date_of_death, suspected_circumstances, contact_information, burial_date, autopsy_approved, autopsy_report, chamber_occupied, chamber_number, created_by_name, created_at, updated_by_name, updated_at")
-    .order("date_of_death", { ascending: false });
-  deceasedRecords = error ? [] : (data || []);
+  const columns = "id, patient_name, date_of_death, suspected_circumstances, contact_information, burial_date, autopsy_approved, autopsy_report, chamber_occupied, chamber_number, created_by_name, created_at, updated_by_name, updated_at";
+  const activeRequest = db.from("deceased_records").select(columns).eq("autopsy_report", false).order("date_of_death", { ascending: false });
+  let historyRequest = db.from("deceased_records").select(columns, { count: "exact" }).eq("autopsy_report", true).order("updated_at", { ascending: false });
+  historyRequest = applyHistoryFilters(historyRequest, "deceased", "updated_at", ["patient_name", "suspected_circumstances", "contact_information"]);
+  const [activeResult, historyResult] = await Promise.all([activeRequest, historyRequest]);
+  const error = activeResult.error || historyResult.error;
+  deceasedRecords = error ? [] : [...(activeResult.data || []), ...(historyResult.data || [])];
+  historyStates.deceased.total = historyResult.count || 0;
   if (error) showToast("Totenübersicht konnte nicht geladen werden.");
   renderDeceasedRecords();
 }
@@ -1288,7 +1376,8 @@ function renderDeceasedRecords() {
   $("#deceasedOccupiedCount").textContent = occupiedRecords.length;
   $("#deceasedFreeCount").textContent = Math.max(0, 16 - occupiedRecords.length);
   $("#deceasedPendingReportsCount").textContent = activeRecords.filter(record => record.autopsy_approved).length;
-  $("#deceasedHistoryCount").textContent = historyRecords.length;
+  $("#deceasedHistoryCount").textContent = historyStates.deceased.total;
+  renderHistoryControls("deceased");
   $("#chamberGrid").innerHTML = Array.from({ length: 16 }, (_, index) => {
     const number = index + 1;
     const record = occupiedByChamber.get(number);
@@ -2148,6 +2237,36 @@ $("#cancelBtn").addEventListener("click", () => dialog.close());
 $("#searchInput").addEventListener("input", render);
 $("#triageFilter").addEventListener("change", render);
 $("#normalPatientSearch").addEventListener("input", renderNormalPatients);
+const historySearchTimers = {};
+document.querySelectorAll("[data-history-controls]").forEach(controls => {
+  const module = controls.dataset.historyControls;
+  controls.querySelector("[data-history-search]").addEventListener("input", event => {
+    clearTimeout(historySearchTimers[module]);
+    historySearchTimers[module] = setTimeout(() => {
+      historyStates[module].query = event.target.value.trim();
+      historyStates[module].page = 0;
+      syncHistoryUrl(module);
+      reloadHistory(module);
+    }, 300);
+  });
+  controls.querySelector("[data-history-range]").addEventListener("change", event => {
+    historyStates[module].range = event.target.value;
+    historyStates[module].page = 0;
+    syncHistoryUrl(module);
+    reloadHistory(module);
+  });
+  controls.querySelector("[data-history-prev]").addEventListener("click", () => {
+    historyStates[module].page = Math.max(0, historyStates[module].page - 1);
+    syncHistoryUrl(module);
+    reloadHistory(module);
+  });
+  controls.querySelector("[data-history-next]").addEventListener("click", () => {
+    const pages = Math.max(1, Math.ceil(historyStates[module].total / HISTORY_PAGE_SIZE));
+    historyStates[module].page = Math.min(pages - 1, historyStates[module].page + 1);
+    syncHistoryUrl(module);
+    reloadHistory(module);
+  });
+});
 $("#surgery").addEventListener("change", () => updateConditionalPatientFields());
 $("#followUp").addEventListener("change", () => updateConditionalPatientFields());
 $("#triage").addEventListener("change", event => {

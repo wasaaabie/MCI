@@ -16,6 +16,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
 - Eigene Seite für normale Patientenübergaben ohne MCI, Triage und Patientennummer, mit schreibgeschützter Behandlungshistorie
 - Automatische Live-Aktualisierung
+- Serverseitig paginierte Historien mit 20 Einträgen pro Seite, Suche und Zeitraumfilter
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
 - Triage mit zeitlichem Änderungsverlauf
 - Versorgung, Transportstatus und Krankenhausdokumentation

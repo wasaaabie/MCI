@@ -52,6 +52,7 @@ create table if not exists public.patients (
 create table if not exists public.normal_patient_handoffs (
   id uuid primary key,
   data jsonb not null default '{}'::jsonb,
+  search_text text generated always as (coalesce(data ->> 'name', '') || ' ' || coalesce(data ->> 'unitOnSite', '') || ' ' || coalesce(data ->> 'destinationHospital', '') || ' ' || coalesce(data ->> 'physician', '') || ' ' || coalesce(data ->> 'treatmentArea', '')) stored,
   status text not null default 'active' check (status in ('active', 'closed')),
   updated_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
@@ -61,6 +62,7 @@ create table if not exists public.normal_patient_handoffs (
   closed_at timestamptz
 );
 
+alter table public.normal_patient_handoffs add column if not exists search_text text generated always as (coalesce(data ->> 'name', '') || ' ' || coalesce(data ->> 'unitOnSite', '') || ' ' || coalesce(data ->> 'destinationHospital', '') || ' ' || coalesce(data ->> 'physician', '') || ' ' || coalesce(data ->> 'treatmentArea', '')) stored;
 alter table public.normal_patient_handoffs add column if not exists status text not null default 'active' check (status in ('active', 'closed'));
 alter table public.normal_patient_handoffs add column if not exists closed_by uuid references auth.users(id);
 alter table public.normal_patient_handoffs add column if not exists closed_by_name text;
@@ -308,11 +310,16 @@ end $$;
 alter table public.patients alter column incident_id set not null;
 create index if not exists patients_incident_id_idx on public.patients (incident_id);
 create index if not exists normal_patient_handoffs_updated_idx on public.normal_patient_handoffs (updated_at desc);
+create index if not exists normal_patient_handoffs_history_idx on public.normal_patient_handoffs (closed_at desc) where status = 'closed';
 create index if not exists incidents_status_started_idx on public.incidents (status, started_at desc);
+create index if not exists incidents_history_idx on public.incidents (closed_at desc) where status = 'closed';
 create index if not exists activity_log_incident_created_idx on public.activity_log (incident_id, created_at desc);
 create index if not exists bulletin_entries_status_created_idx on public.bulletin_entries (status, created_at desc);
+create index if not exists bulletin_entries_history_idx on public.bulletin_entries (completed_at desc) where status = 'done';
 create index if not exists lab_requests_status_created_idx on public.lab_requests (status, created_at desc);
+create index if not exists lab_requests_history_idx on public.lab_requests (completed_at desc) where status = 'done';
 create index if not exists deceased_records_death_date_idx on public.deceased_records (date_of_death desc);
+create index if not exists deceased_records_history_idx on public.deceased_records (updated_at desc) where autopsy_report;
 create unique index if not exists deceased_records_occupied_chamber_idx
 on public.deceased_records (chamber_number) where chamber_occupied;
 create unique index if not exists psychology_records_file_number_idx on public.psychology_records (lower(file_number));
