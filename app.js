@@ -464,7 +464,7 @@ async function showNormalPatientOverview() {
 async function loadNormalPatients() {
   if (!db || !currentUser) return;
   $("#saveState").textContent = "Synchronisiere …";
-  const { data, error } = await db.from("normal_patient_handoffs").select("id, data, created_at, updated_at").order("updated_at", { ascending: false });
+  const { data, error } = await db.from("normal_patient_handoffs").select("id, data, status, created_at, updated_at, closed_at, closed_by_name").order("updated_at", { ascending: false });
   if (error) {
     $("#saveState").textContent = "Synchronisierung fehlgeschlagen";
     showToast("Patientenübergaben konnten nicht geladen werden. Bitte das aktualisierte SQL-Skript ausführen.");
@@ -473,8 +473,11 @@ async function loadNormalPatients() {
   normalPatients = (data || []).map(row => ({
     ...(row.data && typeof row.data === "object" ? row.data : {}),
     id: row.id,
+    status: row.status || "active",
     createdAt: row.data?.createdAt || row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    closedAt: row.closed_at,
+    closedByName: row.closed_by_name
   }));
   renderNormalPatients();
   $("#saveState").textContent = `Live · ${new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
@@ -482,26 +485,33 @@ async function loadNormalPatients() {
 
 function renderNormalPatients() {
   const query = $("#normalPatientSearch").value.trim().toLocaleLowerCase("de");
-  const visible = normalPatients
-    .filter(patient => !query || [patient.name, patient.unitOnSite, patient.destinationHospital, patient.treatmentArea, patient.physician].some(value => String(value || "").toLocaleLowerCase("de").includes(query)))
+  const matchesSearch = patient => !query || [patient.name, patient.unitOnSite, patient.destinationHospital, patient.treatmentArea, patient.physician].some(value => String(value || "").toLocaleLowerCase("de").includes(query));
+  const active = normalPatients.filter(patient => patient.status !== "closed");
+  const closed = normalPatients.filter(patient => patient.status === "closed");
+  const visible = active
+    .filter(matchesSearch)
     .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
-  $("#normalCountAll").textContent = normalPatients.length;
-  $("#normalCountSurgery").textContent = normalPatients.filter(patient => patient.surgery).length;
-  $("#normalCountFollowUp").textContent = normalPatients.filter(patient => patient.followUp).length;
-  $("#normalPatientsEmpty").classList.toggle("hidden", normalPatients.length > 0);
-  $("#normalPatientGrid").classList.toggle("hidden", normalPatients.length === 0);
+  const visibleHistory = closed.filter(matchesSearch).sort((a, b) => new Date(b.closedAt || 0) - new Date(a.closedAt || 0));
+  $("#normalCountAll").textContent = active.length;
+  $("#normalCountSurgery").textContent = active.filter(patient => patient.surgery).length;
+  $("#normalCountFollowUp").textContent = active.filter(patient => patient.followUp).length;
+  $("#normalPatientHistoryCount").textContent = closed.length;
+  $("#normalPatientsEmpty").classList.toggle("hidden", active.length > 0);
+  $("#normalPatientGrid").classList.toggle("hidden", active.length === 0);
   $("#normalPatientGrid").innerHTML = visible.length ? visible.map(normalPatientCard).join("") : `<div class="no-results">Keine passenden Patientenübergaben gefunden.</div>`;
+  $("#normalPatientHistoryGrid").innerHTML = visibleHistory.length ? visibleHistory.map(patient => normalPatientCard(patient, true)).join("") : `<div class="incident-empty">Noch keine abgeschlossenen Behandlungen vorhanden.</div>`;
   document.querySelectorAll("[data-edit-normal-id]").forEach(button => button.addEventListener("click", () => openDialog(button.dataset.editNormalId, "normal")));
   document.querySelectorAll("[data-copy-normal-patient]").forEach(button => button.addEventListener("click", () => copyPatientAsText(button.dataset.copyNormalPatient, true)));
+  document.querySelectorAll('[data-delete-history="normal_handoff"]').forEach(button => button.addEventListener("click", () => deleteHistoricalEntry("normal_handoff", button.dataset.historyId)));
 }
 
-function normalPatientCard(patient) {
+function normalPatientCard(patient, closed = false) {
   const statuses = [
     patient.surgery && { label: "OP", style: "" },
     patient.followUp && { label: `Nachkontrolle ${formatCalendarDate(patient.followUpDate)}`, style: "ready" }
   ].filter(Boolean);
-  return `<article class="patient-card normal-patient-card">
-    <div class="card-top"><div><h2>${escapeHtml(patient.name || "Unbekannt")}</h2><span class="patient-no">Reguläre Übergabe</span></div><span class="triage-badge unassigned">Patient</span></div>
+  return `<article class="patient-card normal-patient-card${closed ? " history-card" : ""}">
+    <div class="card-top"><div><h2>${escapeHtml(patient.name || "Unbekannt")}</h2><span class="patient-no">${closed ? `Abgeschlossen ${formatDate(patient.closedAt)}` : "Reguläre Übergabe"}</span></div><span class="triage-badge unassigned">${closed ? "Historie" : "Patient"}</span></div>
     <div class="card-details">
       <div class="detail"><span>Ankunft am Patienten</span><strong>${formatDate(patient.arrivalAt)}</strong></div>
       <div class="detail"><span>Einheit vor Ort</span><strong title="${escapeHtml(patient.unitOnSite)}">${escapeHtml(patient.unitOnSite || "–")}</strong></div>
@@ -509,7 +519,7 @@ function normalPatientCard(patient) {
       <div class="detail"><span>Übergabe an</span><strong title="${escapeHtml(patient.treatmentArea)}">${escapeHtml(patient.treatmentArea || "–")}</strong></div>
     </div>
     <div class="status-row">${statuses.length ? statuses.map(status => `<span class="status-chip ${status.style}">${status.label}</span>`).join("") : `<span class="status-chip">Übergabe dokumentiert</span>`}</div>
-    <div class="card-footer"><span class="updated-at">Aktualisiert ${formatDate(patient.updatedAt)}</span><div class="patient-card-actions"><button class="edit-button" type="button" data-copy-normal-patient="${escapeHtml(patient.id)}">Als Text kopieren</button><button class="edit-button" type="button" data-edit-normal-id="${escapeHtml(patient.id)}">Öffnen</button></div></div>
+    <div class="card-footer"><span class="updated-at">${closed ? `Abgeschlossen von ${escapeHtml(patient.closedByName || "Unbekannt")}` : `Aktualisiert ${formatDate(patient.updatedAt)}`}</span><div class="patient-card-actions"><button class="edit-button" type="button" data-copy-normal-patient="${escapeHtml(patient.id)}">Als Text kopieren</button><button class="edit-button" type="button" data-edit-normal-id="${escapeHtml(patient.id)}">${closed ? "Ansehen" : "Öffnen"}</button>${closed ? historyDeleteButton("normal_handoff", patient.id) : ""}</div></div>
   </article>`;
 }
 
@@ -1331,10 +1341,11 @@ async function deleteHistoricalEntry(type, id) {
     incident: incidents,
     bulletin: bulletinEntries,
     lab: labEntries,
-    deceased: deceasedRecords
+    deceased: deceasedRecords,
+    normal_handoff: normalPatients
   };
   const entry = sources[type]?.find(item => item.id === id);
-  const label = entry?.title || entry?.patient_name || "dieser Eintrag";
+  const label = entry?.title || entry?.patient_name || entry?.name || "dieser Eintrag";
   const incidentWarning = type === "incident" ? " Dabei werden auch alle Patienten- und Protokolldaten dieser MCI gelöscht." : "";
   if (!confirm(`„${label}“ wirklich endgültig aus der Historie löschen?${incidentWarning} Dieser Vorgang ist unwiderruflich.`)) return;
   const { error } = await db.rpc("delete_history_entry", { p_entry_type: type, p_entry_id: id });
@@ -1346,6 +1357,7 @@ async function deleteHistoricalEntry(type, id) {
   if (type === "bulletin") await loadBulletinEntries();
   if (type === "lab") await loadLabEntries();
   if (type === "deceased") await loadDeceasedRecords();
+  if (type === "normal_handoff") await loadNormalPatients();
   showToast("Historieneintrag wurde endgültig gelöscht.");
 }
 
@@ -1588,9 +1600,9 @@ function openDialog(id = "", mode = "mci") {
   patientDialogMode = mode;
   form.reset();
   const normal = mode === "normal";
-  const readOnly = !normal && currentIncident?.status === "closed";
   $("#patientId").value = id;
   const patient = (normal ? normalPatients : patients).find(item => item.id === id);
+  const readOnly = normal ? patient?.status === "closed" : currentIncident?.status === "closed";
   $("#dialogTitle").textContent = readOnly ? "Patient ansehen" : patient ? "Patient bearbeiten" : "Patient anlegen";
   $("#patientSectionTitle").textContent = normal ? "Patient & Ankunft" : "Patient & Sichtung";
   $("#patientSectionDescription").textContent = normal ? "Identität, Beschreibung und Ankunftszeit" : "Identität, Beschreibung und Priorität";
@@ -1598,6 +1610,7 @@ function openDialog(id = "", mode = "mci") {
   ["#patientNumberField", "#triageField", "#onSiteChecks", "#admittedCheck", "#treatedHospitalCheck", "#idCheckHospitalCheck", "#dischargedCheck"].forEach(selector => $(selector).classList.toggle("hidden", normal));
   $("#triage").required = !normal;
   $("#deleteBtn").classList.toggle("hidden", !patient || readOnly);
+  $("#deleteBtn").textContent = normal ? "Behandlung abschließen" : "Patient löschen";
   if (patient) {
     (normal ? normalPatientFields : fields).forEach(field => { $(`#${field}`).value = patient[field] || (field === "triage" ? "unassigned" : ""); });
     (normal ? ["surgery", "followUp"] : checkFields).forEach(field => { $(`#${field}`).checked = Boolean(patient[field]); });
@@ -1685,7 +1698,8 @@ function renderTriageHistory(patient, pendingTriage = "") {
 form.addEventListener("submit", async event => {
   event.preventDefault();
   const normal = patientDialogMode === "normal";
-  if (!form.reportValidity() || !currentUser || (!normal && currentIncident?.status !== "active")) return;
+  const existingNormalPatient = normalPatients.find(item => item.id === $("#patientId").value);
+  if (!form.reportValidity() || !currentUser || (normal && existingNormalPatient?.status === "closed") || (!normal && currentIncident?.status !== "active")) return;
   const button = $("#savePatientBtn");
   button.disabled = true;
   button.textContent = "Speichert …";
@@ -1715,24 +1729,34 @@ $("#deleteBtn").addEventListener("click", async () => {
   const id = $("#patientId").value;
   const collection = normal ? normalPatients : patients;
   const patient = collection.find(item => item.id === id);
-  if (!patient || !confirm(`Datensatz „${patient.name}“ wirklich löschen?`)) return;
+  if (!patient) return;
+  if (normal) {
+    if (patient.status === "closed" || !confirm(`Behandlung von „${patient.name}“ abschließen? Danach ist die Übergabe schreibgeschützt und wird in die Historie verschoben.`)) return;
+    $("#deleteBtn").disabled = true;
+    const { error } = await db.from("normal_patient_handoffs").update({ status: "closed", updated_by: currentUser.id }).eq("id", id).eq("status", "active");
+    $("#deleteBtn").disabled = false;
+    if (error) {
+      showToast("Behandlung konnte nicht abgeschlossen werden.");
+      return;
+    }
+    dialog.close();
+    await loadNormalPatients();
+    showToast("Behandlung abgeschlossen und in die Historie verschoben.");
+    return;
+  }
+  if (!confirm(`Datensatz „${patient.name}“ wirklich löschen?`)) return;
   $("#deleteBtn").disabled = true;
-  const { error } = await db.from(normal ? "normal_patient_handoffs" : "patients").delete().eq("id", id);
+  const { error } = await db.from("patients").delete().eq("id", id);
   $("#deleteBtn").disabled = false;
   if (error) {
     showToast("Löschen fehlgeschlagen. Bitte erneut versuchen.");
     return;
   }
-  if (normal) {
-    normalPatients = normalPatients.filter(item => item.id !== id);
-    renderNormalPatients();
-  } else {
-    patients = patients.filter(item => item.id !== id);
-    render();
-  }
+  patients = patients.filter(item => item.id !== id);
+  render();
   dialog.close();
-  showToast(normal ? "Patientenübergabe gelöscht." : "Patientendatensatz gelöscht.");
-  if (!normal) loadActivity();
+  showToast("Patientendatensatz gelöscht.");
+  loadActivity();
 });
 
 function showToast(message) {

@@ -52,10 +52,19 @@ create table if not exists public.patients (
 create table if not exists public.normal_patient_handoffs (
   id uuid primary key,
   data jsonb not null default '{}'::jsonb,
+  status text not null default 'active' check (status in ('active', 'closed')),
   updated_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  closed_by uuid references auth.users(id),
+  closed_by_name text,
+  closed_at timestamptz
 );
+
+alter table public.normal_patient_handoffs add column if not exists status text not null default 'active' check (status in ('active', 'closed'));
+alter table public.normal_patient_handoffs add column if not exists closed_by uuid references auth.users(id);
+alter table public.normal_patient_handoffs add column if not exists closed_by_name text;
+alter table public.normal_patient_handoffs add column if not exists closed_at timestamptz;
 
 create table if not exists public.activity_log (
   id bigint generated always as identity primary key,
@@ -626,6 +635,34 @@ update public.deceased_records
 set chamber_occupied = false, chamber_number = null
 where autopsy_report and (chamber_occupied or chamber_number is not null);
 
+create or replace function public.protect_normal_patient_handoff()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_name text;
+begin
+  select display_name into actor_name from public.mci_members where user_id = auth.uid();
+  if tg_op = 'INSERT' then
+    new.status := 'active';
+    new.created_at := now();
+    new.closed_by := null; new.closed_by_name := null; new.closed_at := null;
+  elsif old.status = 'closed' then
+    raise exception 'Abgeschlossene Behandlungen sind schreibgeschützt.';
+  elsif new.status = 'closed' then
+    new.closed_by := auth.uid(); new.closed_by_name := coalesce(actor_name, 'Unbekannt'); new.closed_at := now();
+  else
+    new.status := 'active';
+    new.closed_by := null; new.closed_by_name := null; new.closed_at := null;
+  end if;
+  new.updated_by := auth.uid();
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
 create or replace function public.delete_history_entry(p_entry_type text, p_entry_id uuid)
 returns void
 language plpgsql
@@ -658,6 +695,9 @@ begin
     when 'deceased' then
       delete from public.deceased_records where id = p_entry_id and autopsy_report;
       if not found then raise exception 'Historischer Eintrag der Totenübersicht nicht gefunden.'; end if;
+    when 'normal_handoff' then
+      delete from public.normal_patient_handoffs where id = p_entry_id and status = 'closed';
+      if not found then raise exception 'Abgeschlossene Patientenübergabe nicht gefunden.'; end if;
     when 'psychology' then
       if not exists (select 1 from public.psychology_records where id = p_entry_id and status = 'closed') then
         raise exception 'Abgeschlossene Psychologie-Akte nicht gefunden.';
@@ -710,6 +750,10 @@ drop trigger if exists patients_activity_trigger on public.patients;
 create trigger patients_activity_trigger after insert or update or delete on public.patients
 for each row execute function public.log_patient_activity();
 
+drop trigger if exists normal_patient_handoffs_protection_trigger on public.normal_patient_handoffs;
+create trigger normal_patient_handoffs_protection_trigger before insert or update on public.normal_patient_handoffs
+for each row execute function public.protect_normal_patient_handoff();
+
 drop trigger if exists incidents_activity_trigger on public.incidents;
 create trigger incidents_activity_trigger after insert or update on public.incidents
 for each row execute function public.log_incident_activity();
@@ -755,6 +799,7 @@ create trigger mci_members_last_manager_trigger before update or delete on publi
 for each row execute function public.protect_last_user_manager();
 
 revoke execute on function public.log_patient_activity() from public, anon, authenticated;
+revoke execute on function public.protect_normal_patient_handoff() from public, anon, authenticated;
 revoke execute on function public.log_incident_activity() from public, anon, authenticated;
 revoke execute on function public.protect_bulletin_entry() from public, anon, authenticated;
 revoke execute on function public.protect_lab_request() from public, anon, authenticated;
@@ -800,7 +845,7 @@ revoke all on public.fire_investigation_log from anon, authenticated;
 grant select on public.mci_members to authenticated;
 grant select, insert, update on public.incidents to authenticated;
 grant select, insert, update, delete on public.patients to authenticated;
-grant select, insert, update, delete on public.normal_patient_handoffs to authenticated;
+grant select, insert, update on public.normal_patient_handoffs to authenticated;
 grant select on public.activity_log to authenticated;
 grant select, insert, update on public.bulletin_entries to authenticated;
 grant select, insert, update on public.lab_requests to authenticated;
@@ -1069,16 +1114,17 @@ with check (
 drop policy if exists "Mitglieder ändern normale Übergaben" on public.normal_patient_handoffs;
 create policy "Mitglieder ändern normale Übergaben"
 on public.normal_patient_handoffs for update to authenticated
-using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()))
+using (
+  status = 'active'
+  and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
+)
 with check (
   updated_by = auth.uid()
+  and status in ('active', 'closed')
   and exists (select 1 from public.mci_members m where m.user_id = auth.uid())
 );
 
 drop policy if exists "Mitglieder löschen normale Übergaben" on public.normal_patient_handoffs;
-create policy "Mitglieder löschen normale Übergaben"
-on public.normal_patient_handoffs for delete to authenticated
-using (exists (select 1 from public.mci_members m where m.user_id = auth.uid()));
 
 drop policy if exists "Mitglieder erstellen Patienten" on public.patients;
 create policy "Mitglieder erstellen Patienten"

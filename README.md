@@ -14,7 +14,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Totenübersicht mit Obduktionsstatus und Live-Belegung von 16 Kühlfächern
 - Optionales Sonderrecht zum endgültigen Löschen sämtlicher Historieneinträge
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
-- Eigene Seite für normale Patientenübergaben ohne MCI, Triage und Patientennummer
+- Eigene Seite für normale Patientenübergaben ohne MCI, Triage und Patientennummer, mit schreibgeschützter Behandlungshistorie
 - Automatische Live-Aktualisierung
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen
 - Triage mit zeitlichem Änderungsverlauf
@@ -134,7 +134,7 @@ Weitere Konten werden nach dem Login direkt unter **Benutzerverwaltung** angeleg
 
 ### Recht zum Löschen von Historien
 
-Standardmäßig darf kein Benutzer historische Einträge endgültig löschen. Das Sonderrecht gilt gemeinsam für abgeschlossene MCIs, erledigte Einträge am Schwarzen Brett, erledigte Labor Requests und abgeschlossene Einträge der Totenübersicht. Es wird im SQL Editor gezielt pro Benutzer vergeben:
+Standardmäßig darf kein Benutzer historische Einträge endgültig löschen. Das Sonderrecht gilt gemeinsam für abgeschlossene MCIs, Patientenübergaben, erledigte Einträge am Schwarzen Brett, erledigte Labor Requests und abgeschlossene Einträge der Totenübersicht. Es wird im SQL Editor gezielt pro Benutzer vergeben:
 
 ```sql
 update public.mci_members
