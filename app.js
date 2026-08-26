@@ -10,7 +10,9 @@ const historyStates = Object.fromEntries(HISTORY_MODULES.map(module => {
   return [module, {
     page: Math.max(0, Number(params.get(`history_${module}_page`)) - 1 || 0),
     query: params.get(`history_${module}_q`) || "",
-    range: ["7", "30", "year", "all"].includes(range) ? range : "30",
+    range: ["7", "30", "year", "all", "custom"].includes(range) ? range : "30",
+    from: /^\d{4}-\d{2}-\d{2}$/.test(params.get(`history_${module}_from`) || "") ? params.get(`history_${module}_from`) : "",
+    to: /^\d{4}-\d{2}-\d{2}$/.test(params.get(`history_${module}_to`) || "") ? params.get(`history_${module}_to`) : "",
     total: 0
   }];
 }));
@@ -76,9 +78,18 @@ function historySince(range) {
 function applyHistoryFilters(query, module, dateColumn, searchColumns = []) {
   const state = historyStates[module];
   const term = state.query.trim().replace(/[,()%"\\]/g, " ").replace(/\s+/g, " ");
-  const since = historySince(state.range);
   if (term && searchColumns.length) query = query.or(searchColumns.map(column => `${column}.ilike.%${term}%`).join(","));
-  if (since) query = query.gte(dateColumn, since);
+  if (state.range === "custom") {
+    if (state.from) query = query.gte(dateColumn, new Date(`${state.from}T00:00:00`).toISOString());
+    if (state.to) {
+      const exclusiveEnd = new Date(`${state.to}T00:00:00`);
+      exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+      query = query.lt(dateColumn, exclusiveEnd.toISOString());
+    }
+  } else {
+    const since = historySince(state.range);
+    if (since) query = query.gte(dateColumn, since);
+  }
   const from = state.page * HISTORY_PAGE_SIZE;
   return query.range(from, from + HISTORY_PAGE_SIZE - 1);
 }
@@ -86,7 +97,7 @@ function applyHistoryFilters(query, module, dateColumn, searchColumns = []) {
 function syncHistoryUrl(module) {
   const state = historyStates[module];
   const url = new URL(location.href);
-  const values = { page: state.page + 1, q: state.query, range: state.range };
+  const values = { page: state.page + 1, q: state.query, range: state.range, from: state.range === "custom" ? state.from : "", to: state.range === "custom" ? state.to : "" };
   Object.entries(values).forEach(([key, value]) => {
     const name = `history_${module}_${key}`;
     if (!value || (key === "page" && value === 1) || (key === "range" && value === "30")) url.searchParams.delete(name);
@@ -108,6 +119,11 @@ function renderHistoryControls(module) {
   }
   controls.querySelector("[data-history-search]").value = state.query;
   controls.querySelector("[data-history-range]").value = state.range;
+  controls.querySelector("[data-history-custom-dates]").classList.toggle("hidden", state.range !== "custom");
+  controls.querySelector("[data-history-from]").value = state.from;
+  controls.querySelector("[data-history-to]").value = state.to;
+  controls.querySelector("[data-history-from]").max = state.to;
+  controls.querySelector("[data-history-to]").min = state.from;
   controls.querySelector("[data-history-page-info]").textContent = `${state.page + 1} / ${pages}`;
   controls.querySelector("[data-history-prev]").disabled = state.page === 0;
   controls.querySelector("[data-history-next]").disabled = state.page + 1 >= pages;
@@ -2251,10 +2267,26 @@ document.querySelectorAll("[data-history-controls]").forEach(controls => {
   });
   controls.querySelector("[data-history-range]").addEventListener("change", event => {
     historyStates[module].range = event.target.value;
+    if (event.target.value === "custom" && !historyStates[module].from && !historyStates[module].to) {
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - 30);
+      historyStates[module].from = localDateValue(from);
+      historyStates[module].to = localDateValue(to);
+    }
     historyStates[module].page = 0;
     syncHistoryUrl(module);
     reloadHistory(module);
   });
+  ["from", "to"].forEach(boundary => controls.querySelector(`[data-history-${boundary}]`).addEventListener("change", event => {
+    historyStates[module][boundary] = event.target.value;
+    if (historyStates[module].from && historyStates[module].to && historyStates[module].from > historyStates[module].to) {
+      historyStates[module][boundary === "from" ? "to" : "from"] = event.target.value;
+    }
+    historyStates[module].page = 0;
+    syncHistoryUrl(module);
+    reloadHistory(module);
+  }));
   controls.querySelector("[data-history-prev]").addEventListener("click", () => {
     historyStates[module].page = Math.max(0, historyStates[module].page - 1);
     syncHistoryUrl(module);
