@@ -14,7 +14,7 @@ Geschütztes, gemeinsames Einsatzboard für ein RP-Projekt. Die Website kann auf
 - Totenübersicht mit Obduktionsstatus und Live-Belegung von 16 Kühlfächern
 - Optionales Sonderrecht zum endgültigen Löschen sämtlicher Historieneinträge
 - Gemeinsame Patientendaten für alle angemeldeten Mitglieder
-- Eigene Seite für normale Patientenübergaben ohne MCI, Triage und Patientennummer, mit schreibgeschützter Behandlungshistorie
+- Eigene Seite für Patientenübergaben ohne MCI, Triage und Patientennummer, mit schreibgeschützter Behandlungshistorie
 - Automatische Live-Aktualisierung
 - Serverseitig paginierte Historien mit 20 Einträgen pro Seite, Suche und Zeitraumfilter
 - Patientenstammdaten, Verletzungen, Medikation und Maßnahmen

@@ -542,7 +542,7 @@ async function showNormalPatientOverview() {
   $("#normalPatientsMain").classList.remove("hidden");
   ["#newIncidentBtn", "#newPatientBtn", "#newBulletinBtn", "#newLabBtn", "#newDeceasedBtn", "#closeIncidentBtn"].forEach(selector => $(selector).classList.add("hidden"));
   $("#newNormalPatientBtn").classList.remove("hidden");
-  $("#pageTitle").textContent = "Normale Patientenübergabe";
+  $("#pageTitle").textContent = "Patientenübergabe";
   $("#saveState").textContent = "Live synchronisiert";
   setActiveNav("normalPatients");
   await loadNormalPatients();
