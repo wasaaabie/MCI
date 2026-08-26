@@ -30,7 +30,7 @@ const fields = [
   "physician", "hospitalNotes", "surgeryReport", "followUpDate", "notes"
 ];
 const checkFields = ["treatedOnSite", "idCheckCode7", "readyForTransport", "transported", "admitted", "surgery", "treatedHospital", "idCheckHospital", "discharged", "followUp"];
-const normalPatientFields = ["name", "gender", "age", "description", "injuries", "medication", "unitOnSite", "treatmentArea", "destinationHospital", "physician", "hospitalNotes", "surgeryReport", "followUpDate", "notes"];
+const normalPatientFields = ["name", "gender", "age", "description", "triage", "injuries", "medication", "unitOnSite", "treatmentArea", "destinationHospital", "physician", "hospitalNotes", "surgeryReport", "followUpDate", "notes"];
 
 let patients = [];
 let normalPatients = [];
@@ -599,12 +599,13 @@ function renderNormalPatients() {
 }
 
 function normalPatientCard(patient, closed = false) {
+  const triage = patient.triage || "unassigned";
   const statuses = [
     patient.surgery && { label: "OP", style: "" },
     patient.followUp && { label: `Nachkontrolle ${formatCalendarDate(patient.followUpDate)}`, style: "ready" }
   ].filter(Boolean);
   return `<article class="patient-card normal-patient-card${closed ? " history-card" : ""}">
-    <div class="card-top"><div><h2>${escapeHtml(patient.name || "Unbekannt")}</h2><span class="patient-no">${closed ? `Abgeschlossen ${formatDate(patient.closedAt)}` : "Reguläre Übergabe"}</span></div><span class="triage-badge unassigned">${closed ? "Historie" : "Patient"}</span></div>
+    <div class="card-top"><div><h2>${escapeHtml(patient.name || "Unbekannt")}</h2><span class="patient-no">${closed ? `Abgeschlossen ${formatDate(patient.closedAt)}` : "Reguläre Übergabe"}</span></div><span class="triage-badge ${escapeHtml(triage)}">${escapeHtml(triageLabels[triage] || triageLabels.unassigned)}</span></div>
     <div class="card-details">
       <div class="detail"><span>Ankunft am Patienten</span><strong>${formatDate(patient.arrivalAt)}</strong></div>
       <div class="detail"><span>Einheit vor Ort</span><strong title="${escapeHtml(patient.unitOnSite)}">${escapeHtml(patient.unitOnSite || "–")}</strong></div>
@@ -1641,7 +1642,7 @@ function patientAsText(patient) {
   const lines = [
     "PATIENTENAKTE",
     "=============",
-    ...(normal ? [`Ankunft am Patienten: ${formatDate(patient.arrivalAt)}`] : [`Patientennummer: ${value(patient.patientNumber)}`, `Sichtungszeit: ${formatDate(patient.triageTime)}`]),
+    ...(normal ? [`Sichtungskategorie: ${triageLabels[patient.triage || "unassigned"]}`, `Ankunft am Patienten: ${formatDate(patient.arrivalAt)}`] : [`Patientennummer: ${value(patient.patientNumber)}`, `Sichtungszeit: ${formatDate(patient.triageTime)}`]),
     `Name: ${value(patient.name)}`,
     `Geschlecht: ${value(patient.gender)}`,
     `Alter / Geburtsdatum: ${value(patient.age)}`,
@@ -1709,11 +1710,12 @@ function openDialog(id = "", mode = "mci") {
   const patient = (normal ? normalPatients : patients).find(item => item.id === id);
   const readOnly = normal ? patient?.status === "closed" : currentIncident?.status === "closed";
   $("#dialogTitle").textContent = readOnly ? "Patient ansehen" : patient ? "Patient bearbeiten" : "Patient anlegen";
-  $("#patientSectionTitle").textContent = normal ? "Patient & Ankunft" : "Patient & Sichtung";
-  $("#patientSectionDescription").textContent = normal ? "Identität, Beschreibung und Ankunftszeit" : "Identität, Beschreibung und Priorität";
+  $("#patientSectionTitle").textContent = normal ? "Patient, Sichtung & Ankunft" : "Patient & Sichtung";
+  $("#patientSectionDescription").textContent = normal ? "Identität, Sichtungskategorie und Ankunftszeit" : "Identität, Beschreibung und Priorität";
+  $("#triageFieldLabel").textContent = normal ? "Sichtungskategorie *" : "Triage-Einstufung *";
   $("#triageTimeLabel").textContent = normal ? "Ankunft am Patienten" : "Zeitpunkt der Sichtung";
-  ["#patientNumberField", "#triageField", "#onSiteChecks", "#admittedCheck", "#treatedHospitalCheck", "#idCheckHospitalCheck", "#dischargedCheck"].forEach(selector => $(selector).classList.toggle("hidden", normal));
-  $("#triage").required = !normal;
+  ["#patientNumberField", "#onSiteChecks", "#admittedCheck", "#treatedHospitalCheck", "#idCheckHospitalCheck", "#dischargedCheck"].forEach(selector => $(selector).classList.toggle("hidden", normal));
+  $("#triage").required = true;
   $("#deleteBtn").classList.toggle("hidden", !patient || readOnly);
   $("#deleteBtn").textContent = normal ? "Behandlung abschließen" : "Patient löschen";
   if (patient) {
@@ -1721,14 +1723,14 @@ function openDialog(id = "", mode = "mci") {
     (normal ? ["surgery", "followUp"] : checkFields).forEach(field => { $(`#${field}`).checked = Boolean(patient[field]); });
     if (normal) $("#triageTime").value = patient.arrivalAt || "";
   } else {
-    if (!normal) $("#triage").value = "unassigned";
+    $("#triage").value = "unassigned";
     $("#triageTime").value = localDateTimeValue(new Date());
     if (!normal) $("#patientNumber").value = nextPatientNumber();
   }
   form.querySelectorAll("input, select, textarea").forEach(control => { control.disabled = readOnly; });
   $("#savePatientBtn").classList.toggle("hidden", readOnly);
   $("#cancelBtn").textContent = readOnly ? "Schließen" : "Abbrechen";
-  if (normal) $("#triageHistoryPanel").classList.add("hidden"); else renderTriageHistory(patient);
+  renderTriageHistory(patient);
   updateConditionalPatientFields(!readOnly);
   dialog.showModal();
   setTimeout(() => $("#name").focus(), 50);
@@ -1773,7 +1775,6 @@ function collectForm() {
   patient.updatedAt = new Date().toISOString();
   if (!patient.surgery) patient.surgeryReport = "";
   if (!patient.followUp) patient.followUpDate = "";
-  if (normal) return patient;
   patient.triageHistory = Array.isArray(existing?.triageHistory) ? [...existing.triageHistory] : [];
   const previousTriage = existing?.triage || "unassigned";
   if (patient.triage !== previousTriage) {
@@ -2302,7 +2303,8 @@ document.querySelectorAll("[data-history-controls]").forEach(controls => {
 $("#surgery").addEventListener("change", () => updateConditionalPatientFields());
 $("#followUp").addEventListener("change", () => updateConditionalPatientFields());
 $("#triage").addEventListener("change", event => {
-  const patient = patients.find(item => item.id === $("#patientId").value);
+  const collection = patientDialogMode === "normal" ? normalPatients : patients;
+  const patient = collection.find(item => item.id === $("#patientId").value);
   renderTriageHistory(patient, event.target.value);
 });
 $("#deceasedChamberOccupied").addEventListener("change", setDeceasedChamberState);

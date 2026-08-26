@@ -468,7 +468,7 @@
             <label class="field"><span>Geschlecht</span><select id="gender"><option value="">Keine Angabe</option><option>Männlich</option><option>Weiblich</option><option>Divers</option><option>Unbekannt</option></select></label>
             <label class="field"><span>Alter / Geburtsdatum</span><input id="age" autocomplete="off" placeholder="z. B. 42 oder 12.05.1984"></label>
             <label class="field field-wide"><span>Beschreibung der Person</span><textarea id="description" rows="2" placeholder="Kleidung, Statur, besondere Merkmale …"></textarea></label>
-            <label id="triageField" class="field"><span>Triage-Einstufung *</span><select id="triage" required><option value="unassigned">Noch nicht eingestuft</option><option value="red">SK I · Rot – sofort</option><option value="yellow">SK II · Gelb – dringend</option><option value="green">SK III · Grün – nachrangig</option><option value="black">Schwarz – verstorben</option></select></label>
+            <label id="triageField" class="field"><span id="triageFieldLabel">Triage-Einstufung *</span><select id="triage" required><option value="unassigned">Noch nicht eingestuft</option><option value="red">SK I · Rot – sofort</option><option value="yellow">SK II · Gelb – dringend</option><option value="green">SK III · Grün – nachrangig</option><option value="black">Schwarz – verstorben</option></select></label>
             <label class="field"><span id="triageTimeLabel">Zeitpunkt der Sichtung</span><input id="triageTime" type="datetime-local"></label>
           </div>
           <div id="triageHistoryPanel" class="triage-history hidden">
@@ -546,6 +546,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=37"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>
