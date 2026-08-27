@@ -3,7 +3,7 @@ const LEGACY_STORAGE_KEY = ["man", "v-board-patients-v1"].join("");
 const MIGRATION_KEY = "mci-board-supabase-migration-v1";
 const NAV_COLLAPSED_KEY = "mci-board-nav-collapsed";
 const HISTORY_PAGE_SIZE = 20;
-const HISTORY_MODULES = ["incidents", "normal", "bulletin", "lab", "deceased"];
+const HISTORY_MODULES = ["incidents", "normal", "bulletin", "lab", "deceased", "psychology"];
 const historyStates = Object.fromEntries(HISTORY_MODULES.map(module => {
   const params = new URLSearchParams(location.search);
   const range = params.get(`history_${module}_range`);
@@ -134,7 +134,7 @@ function renderHistoryControls(module) {
 }
 
 function reloadHistory(module) {
-  ({ incidents: loadIncidents, normal: loadNormalPatients, bulletin: loadBulletinEntries, lab: loadLabEntries, deceased: loadDeceasedRecords })[module]?.();
+  ({ incidents: loadIncidents, normal: loadNormalPatients, bulletin: loadBulletinEntries, lab: loadLabEntries, deceased: loadDeceasedRecords, psychology: loadPsychologyRecords })[module]?.();
 }
 
 function setNavCollapsed(collapsed) {
@@ -856,14 +856,23 @@ async function showPsychologyOverview() {
 
 async function loadPsychologyRecords() {
   if (!db || !currentUser || !canAccessPsychology) return;
-  const [{ data: records, error }, { data: sessionRefs }] = await Promise.all([
-    db.from("psychology_records").select("id, file_number, patient_name, birth_date, phone, treating_staff, general_notes, status, created_by_name, created_at, updated_by_name, updated_at, closed_by_name, closed_at").order("created_at", { ascending: false }),
-    db.from("psychology_sessions").select("record_id, session_at").order("session_at", { ascending: false })
-  ]);
+  const columns = "id, file_number, patient_name, birth_date, phone, treating_staff, general_notes, status, created_by_name, created_at, updated_by_name, updated_at, closed_by_name, closed_at";
+  const currentRequest = db.from("psychology_records").select(columns).neq("status", "closed").order("created_at", { ascending: false });
+  let historyRequest = db.from("psychology_records").select(columns, { count: "exact" }).eq("status", "closed").order("closed_at", { ascending: false });
+  historyRequest = applyHistoryFilters(historyRequest, "psychology", "closed_at", ["file_number", "patient_name", "treating_staff"]);
+  const [currentResult, historyResult] = await Promise.all([currentRequest, historyRequest]);
+  const error = currentResult.error || historyResult.error;
   if (error) {
     psychologyRecords = [];
+    historyStates.psychology.total = 0;
     showToast("Psychologie-Akten konnten nicht geladen werden.");
   } else {
+    historyStates.psychology.total = historyResult.count || 0;
+    const records = [...(currentResult.data || []), ...(historyResult.data || [])];
+    const recordIds = records.map(record => record.id);
+    const { data: sessionRefs } = recordIds.length
+      ? await db.from("psychology_sessions").select("record_id, session_at").in("record_id", recordIds).order("session_at", { ascending: false })
+      : { data: [] };
     const latestSessions = new Map();
     (sessionRefs || []).forEach(session => { if (!latestSessions.has(session.record_id)) latestSessions.set(session.record_id, session.session_at); });
     psychologyRecords = (records || []).map(record => ({ ...record, last_session_at: latestSessions.get(record.id) || null }));
@@ -874,14 +883,16 @@ async function loadPsychologyRecords() {
 function renderPsychologyRecords() {
   const search = $("#psychologySearch").value.trim().toLowerCase();
   const status = $("#psychologyStatusFilter").value;
-  const visible = psychologyRecords.filter(record => {
+  const currentRecords = psychologyRecords.filter(record => record.status !== "closed");
+  const historyRecords = psychologyRecords.filter(record => record.status === "closed");
+  const visible = currentRecords.filter(record => {
     const haystack = `${record.file_number} ${record.patient_name} ${record.treating_staff}`.toLowerCase();
     return (!search || haystack.includes(search)) && (!status || record.status === status);
   });
-  $("#psychologyTotalCount").textContent = psychologyRecords.length;
-  $("#psychologyActiveCount").textContent = psychologyRecords.filter(record => record.status === "active").length;
-  $("#psychologyPausedCount").textContent = psychologyRecords.filter(record => record.status === "paused").length;
-  $("#psychologyClosedCount").textContent = psychologyRecords.filter(record => record.status === "closed").length;
+  $("#psychologyTotalCount").textContent = currentRecords.length + historyStates.psychology.total;
+  $("#psychologyActiveCount").textContent = currentRecords.filter(record => record.status === "active").length;
+  $("#psychologyPausedCount").textContent = currentRecords.filter(record => record.status === "paused").length;
+  $("#psychologyClosedCount").textContent = historyStates.psychology.total;
   $("#psychologyVisibleCount").textContent = visible.length;
   $("#psychologyRecordsBody").innerHTML = visible.length ? visible.map(record => `<tr>
     <td><strong>${escapeHtml(record.file_number)}</strong></td>
@@ -890,8 +901,20 @@ function renderPsychologyRecords() {
     <td><span class="psychology-status ${record.status}">${psychologyStatusLabels[record.status] || "Unbekannt"}</span></td>
     <td class="bulletin-date">${record.last_session_at ? formatDate(record.last_session_at) : "Noch keine Sitzung"}</td>
     <td><button class="bulletin-edit-button" type="button" data-open-psychology="${record.id}">Akte öffnen</button></td>
-  </tr>`).join("") : `<tr><td class="table-empty" colspan="6">Keine passenden Psychologie-Akten vorhanden.</td></tr>`;
+  </tr>`).join("") : `<tr><td class="table-empty" colspan="6">Keine passenden aktuellen Psychologie-Akten vorhanden.</td></tr>`;
+  $("#psychologyHistoryCount").textContent = historyStates.psychology.total;
+  renderHistoryControls("psychology");
+  $("#psychologyHistoryBody").innerHTML = historyRecords.length ? historyRecords.map(record => `<tr>
+    <td><strong>${escapeHtml(record.file_number)}</strong></td>
+    <td><strong>${escapeHtml(record.patient_name)}</strong><br><small>${record.birth_date ? formatDateOnly(record.birth_date) : "Geburtsdatum unbekannt"}</small></td>
+    <td>${escapeHtml(record.treating_staff)}</td>
+    <td class="bulletin-date">${record.last_session_at ? formatDate(record.last_session_at) : "Noch keine Sitzung"}</td>
+    <td>${escapeHtml(record.closed_by_name || "Unbekannt")}</td>
+    <td class="bulletin-date">${formatDate(record.closed_at)}</td>
+    <td><div class="bulletin-actions"><button class="bulletin-edit-button" type="button" data-open-psychology="${record.id}">Historie öffnen</button>${historyDeleteButton("psychology", record.id)}</div></td>
+  </tr>`).join("") : `<tr><td class="table-empty" colspan="7">Noch keine abgeschlossenen Psychologie-Akten im gewählten Zeitraum vorhanden.</td></tr>`;
   document.querySelectorAll("[data-open-psychology]").forEach(button => button.addEventListener("click", () => openPsychologyRecord(button.dataset.openPsychology)));
+  document.querySelectorAll('[data-delete-history="psychology"]').forEach(button => button.addEventListener("click", () => deleteHistoricalEntry("psychology", button.dataset.historyId)));
 }
 
 function formatDateOnly(value) {
@@ -1669,7 +1692,8 @@ async function deleteHistoricalEntry(type, id) {
     bulletin: bulletinEntries,
     lab: labEntries,
     deceased: deceasedRecords,
-    normal_handoff: normalPatients
+    normal_handoff: normalPatients,
+    psychology: psychologyRecords
   };
   const entry = sources[type]?.find(item => item.id === id);
   const label = entry?.title || entry?.patient_name || entry?.name || "dieser Eintrag";
@@ -1685,6 +1709,7 @@ async function deleteHistoricalEntry(type, id) {
   if (type === "lab") await loadLabEntries();
   if (type === "deceased") await loadDeceasedRecords();
   if (type === "normal_handoff") await loadNormalPatients();
+  if (type === "psychology") await loadPsychologyRecords();
   showToast("Historieneintrag wurde endgültig gelöscht.");
 }
 
@@ -2145,6 +2170,7 @@ $("#psychologyRecordForm").addEventListener("submit", async event => {
     general_notes: $("#psychologyGeneralNotes").value.trim() || null,
     status: id ? $("#psychologyRecordStatus").value : "active"
   };
+  const closesRecord = Boolean(id && values.status === "closed" && psychologyRecords.find(record => record.id === id)?.status !== "closed");
   const button = $("#savePsychologyRecordBtn");
   button.disabled = true;
   button.textContent = "Wird gespeichert …";
@@ -2160,7 +2186,7 @@ $("#psychologyRecordForm").addEventListener("submit", async event => {
   $("#psychologyRecordDialog").close();
   await loadPsychologyRecords();
   await openPsychologyRecord(result.data.id);
-  showToast(id ? "Psychologie-Akte wurde aktualisiert." : "Psychologie-Akte wurde angelegt.");
+  showToast(closesRecord ? "Psychologie-Akte wurde in die Historie verschoben." : id ? "Psychologie-Akte wurde aktualisiert." : "Psychologie-Akte wurde angelegt.");
 });
 
 $("#psychologySessionForm").addEventListener("submit", async event => {

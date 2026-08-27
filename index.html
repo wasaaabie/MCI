@@ -76,11 +76,16 @@
     </section>
     <section class="toolbar psychology-toolbar" aria-label="Psychologie-Akten filtern">
       <label class="search-field"><span class="sr-only">Akten suchen</span><input id="psychologySearch" type="search" placeholder="Patient, Aktennummer oder Personal suchen …"></label>
-      <label><span class="sr-only">Status filtern</span><select id="psychologyStatusFilter"><option value="">Alle Status</option><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="closed">Abgeschlossen</option></select></label>
+      <label><span class="sr-only">Status filtern</span><select id="psychologyStatusFilter"><option value="">Alle aktuellen Status</option><option value="active">Aktiv</option><option value="paused">Pausiert</option></select></label>
     </section>
     <section class="board-section">
-      <div class="history-heading"><div><p class="eyebrow">Aktenregister</p><h2>Patientenakten</h2></div><span id="psychologyVisibleCount" class="history-count">0</span></div>
+      <div class="history-heading"><div><p class="eyebrow">Aktenregister</p><h2>Aktuelle Patientenakten</h2></div><span id="psychologyVisibleCount" class="history-count">0</span></div>
       <div class="table-wrap"><table class="bulletin-table psychology-table"><thead><tr><th>Akte</th><th>Patient</th><th>Behandelndes Personal</th><th>Status</th><th>Letzte Sitzung</th><th></th></tr></thead><tbody id="psychologyRecordsBody"></tbody></table></div>
+    </section>
+    <section class="history-section">
+      <div class="history-heading"><div><p class="eyebrow">Historie</p><h2>Abgeschlossene Patientenakten</h2></div><span id="psychologyHistoryCount" class="history-count">0</span></div>
+      <div class="history-controls" data-history-controls="psychology"><input type="search" data-history-search placeholder="Psychologie-Historie durchsuchen …"><select data-history-range><option value="30">Letzte 30 Tage</option><option value="7">Letzte 7 Tage</option><option value="year">Dieses Jahr</option><option value="all">Gesamter Zeitraum</option><option value="custom">Benutzerdefiniert</option></select><div class="history-custom-dates hidden" data-history-custom-dates><label>Von<input type="date" data-history-from></label><label>Bis<input type="date" data-history-to></label></div><div class="history-pagination"><button type="button" data-history-prev>← Zurück</button><span data-history-page-info></span><button type="button" data-history-next>Weiter →</button></div></div>
+      <div class="table-wrap"><table class="bulletin-table psychology-table history-table"><thead><tr><th>Akte</th><th>Patient</th><th>Behandelndes Personal</th><th>Letzte Sitzung</th><th>Abgeschlossen von</th><th>Abgeschlossen am</th><th></th></tr></thead><tbody id="psychologyHistoryBody"></tbody></table></div>
     </section>
   </main>
 
@@ -119,7 +124,7 @@
           <label class="field"><span>Aktenstatus *</span><select id="psychologyRecordStatus"><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="closed">Abgeschlossen</option></select></label>
           <label class="field field-wide"><span>Allgemeine Anmerkungen</span><textarea id="psychologyGeneralNotes" rows="4" placeholder="Übergreifende Informationen zur Behandlung …"></textarea></label>
         </div>
-        <div id="psychologyCloseWarning" class="archive-warning hidden" role="alert"><strong>Akte wird abgeschlossen</strong><span>Nach dem Speichern sind die Akte und ihre Sitzungen schreibgeschützt. Mit der Berechtigung „Historie endgültig löschen“ kann die vollständige Akte später gelöscht werden.</span></div>
+        <div id="psychologyCloseWarning" class="archive-warning hidden" role="alert"><strong>Akte wird abgeschlossen</strong><span>Nach dem Speichern wird die Akte in die Historie verschoben und ist mit ihren Sitzungen schreibgeschützt. Mit der Berechtigung „Historie endgültig löschen“ kann die vollständige Akte später gelöscht werden.</span></div>
       </div>
       <div class="dialog-footer"><div class="footer-spacer"></div><button id="cancelPsychologyRecordBtn" class="button" type="button">Abbrechen</button><button id="savePsychologyRecordBtn" class="button button-primary" type="submit">Akte speichern</button></div>
     </form>
@@ -630,6 +635,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="config.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=40"></script>
+  <script src="app.js?v=41"></script>
 </body>
 </html>
